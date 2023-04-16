@@ -12,8 +12,8 @@
             .hash = "1220202ce1040e8b62e1f1da3650207fcc7d5e11650123f87545e044c58c786bd586",
         },
         .linux_audio_headers = .{
-            .url = "https://github.com/lordmzte/linux-audio-headers/archive/b9b7d24f76a003ae20c6fb5fe789cc319562d16a.tar.gz",
-            .hash = "12201d97054351ffc11a45ddc060260c3393f098d2eacf2bf80dece9ce0b9919ced9",
+            .url = "https://github.com/hexops/linux-audio-headers/archive/81247f122894ee9468e2e80a56cd1842586397d7.tar.gz",
+            .hash = "12204afe37e794bb1c6c9516abcdc310b154c21d7dc451d02918eb1ea14047e5534f",
         },
     },
 }
