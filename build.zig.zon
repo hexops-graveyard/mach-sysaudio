@@ -8,12 +8,12 @@
             .hash = "1220a3a9688b49c1feeae618056267c4f9123e86e7e3eb52764a3b48efb4a81af52a",
         },
         .mach_sysjs = .{
-            .url = "https://github.com/hexops/mach-sysjs/archive/3840ab6fa337a4ccca4b58a8e77afbf6d8af1a81.tar.gz",
-            .hash = "1220202ce1040e8b62e1f1da3650207fcc7d5e11650123f87545e044c58c786bd586",
+            .url = "https://github.com/hexops/mach-sysjs/archive/b71eb0531f337fcca5a2b245f595355260109a34.tar.gz",
+            .hash = "12208b30f1d9c229d1e64483354610207c9aa06350a46558560b818d597800ed86e0",
         },
         .linux_audio_headers = .{
-            .url = "https://github.com/hexops/linux-audio-headers/archive/81247f122894ee9468e2e80a56cd1842586397d7.tar.gz",
-            .hash = "12204afe37e794bb1c6c9516abcdc310b154c21d7dc451d02918eb1ea14047e5534f",
+            .url = "https://github.com/hexops/linux-audio-headers/archive/7f861b6bfd8633b230ab14559af3e8776064e138.tar.gz",
+            .hash = "1220b0e7662bf6f28f8a40df37b6ac7faf0c07a62dba415902a34b24d2e0ab33c34a",
         },
     },
 }
