@@ -17,7 +17,7 @@ const lib = struct {
     var snd_pcm_state: *const fn (?*c.snd_pcm_t) callconv(.C) c.snd_pcm_state_t = undefined;
     var snd_pcm_pause: *const fn (?*c.snd_pcm_t, c_int) callconv(.C) c_int = undefined;
     var snd_pcm_writei: *const fn (?*c.snd_pcm_t, ?*const anyopaque, c.snd_pcm_uframes_t) callconv(.C) c.snd_pcm_sframes_t = undefined;
-    var snd_pcm_recover: *const fn (?*c.snd_pcm_t, c_int, c_int) callconv(.C) c_int = undefined;
+    var snd_pcm_prepare: *const fn (pcm: ?*c.snd_pcm_t) callconv(.C) c_int = undefined;
     var snd_pcm_info_set_device: *const fn (?*c.snd_pcm_info_t, c_uint) callconv(.C) void = undefined;
     var snd_pcm_info_set_subdevice: *const fn (?*c.snd_pcm_info_t, c_uint) callconv(.C) void = undefined;
     var snd_pcm_info_get_name: *const fn (?*const c.snd_pcm_info_t) callconv(.C) [*c]const u8 = undefined;
@@ -71,7 +71,7 @@ const lib = struct {
         snd_pcm_state = handle.lookup(@TypeOf(snd_pcm_state), "snd_pcm_state") orelse return error.SymbolLookup;
         snd_pcm_pause = handle.lookup(@TypeOf(snd_pcm_pause), "snd_pcm_pause") orelse return error.SymbolLookup;
         snd_pcm_writei = handle.lookup(@TypeOf(snd_pcm_writei), "snd_pcm_writei") orelse return error.SymbolLookup;
-        snd_pcm_recover = handle.lookup(@TypeOf(snd_pcm_recover), "snd_pcm_recover") orelse return error.SymbolLookup;
+        snd_pcm_prepare = handle.lookup(@TypeOf(snd_pcm_prepare), "snd_pcm_prepare") orelse return error.SymbolLookup;
         snd_pcm_info_set_device = handle.lookup(@TypeOf(snd_pcm_info_set_device), "snd_pcm_info_set_device") orelse return error.SymbolLookup;
         snd_pcm_info_set_subdevice = handle.lookup(@TypeOf(snd_pcm_info_set_subdevice), "snd_pcm_info_set_subdevice") orelse return error.SymbolLookup;
         snd_pcm_info_get_name = handle.lookup(@TypeOf(snd_pcm_info_get_name), "snd_pcm_info_get_name") orelse return error.SymbolLookup;
@@ -584,19 +584,16 @@ pub const Player = struct {
             ch.*.ptr = self.sample_buffer.ptr + self.format.frameSize(i);
         }
 
+        var underrun = false;
         while (!self.aborted.load(.Unordered)) {
-            var frames_left = self.period_size;
-            while (frames_left > 0) {
-                self.writeFn(self.user_data, frames_left);
-                const n = lib.snd_pcm_writei(self.pcm, self.sample_buffer.ptr, frames_left);
-                if (n < 0) {
-                    if (lib.snd_pcm_recover(self.pcm, @intCast(c_int, n), 1) < 0) {
-                        if (std.debug.runtime_safety) unreachable;
-                        return;
-                    }
-                    return;
-                }
-                frames_left -= @intCast(c_uint, n);
+            if (!underrun) {
+                self.writeFn(self.user_data, self.period_size);
+            }
+            underrun = false;
+            const n = lib.snd_pcm_writei(self.pcm, self.sample_buffer.ptr, self.period_size);
+            if (n < 0) {
+                _ = lib.snd_pcm_prepare(self.pcm);
+                underrun = true;
             }
         }
     }

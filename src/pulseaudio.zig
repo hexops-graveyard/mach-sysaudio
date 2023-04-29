@@ -459,33 +459,28 @@ pub const Player = struct {
         var self = @ptrCast(*Player, @alignCast(@alignOf(*Player), user_data.?));
 
         var frames_left = nbytes;
-        while (frames_left > 0) {
-            var chunk_size = frames_left;
-            if (lib.pa_stream_begin_write(
-                self.stream,
-                @ptrCast(
-                    [*c]?*anyopaque,
-                    @alignCast(@alignOf([*c]?*anyopaque), &self.write_ptr),
-                ),
-                &chunk_size,
-            ) != 0) {
-                if (std.debug.runtime_safety) unreachable;
-                return;
-            }
+        if (lib.pa_stream_begin_write(
+            self.stream,
+            @ptrCast(
+                [*c]?*anyopaque,
+                @alignCast(@alignOf([*c]?*anyopaque), &self.write_ptr),
+            ),
+            &frames_left,
+        ) != 0) {
+            if (std.debug.runtime_safety) unreachable;
+            return;
+        }
 
-            for (self.channels, 0..) |*ch, i| {
-                ch.*.ptr = self.write_ptr + self.format.frameSize(i);
-            }
+        for (self.channels, 0..) |*ch, i| {
+            ch.*.ptr = self.write_ptr + self.format.frameSize(i);
+        }
 
-            const frames = chunk_size / self.format.frameSize(self.channels.len);
-            self.writeFn(self.user_data, frames);
+        const frames = frames_left / self.format.frameSize(self.channels.len);
+        self.writeFn(self.user_data, frames);
 
-            if (lib.pa_stream_write(self.stream, self.write_ptr, chunk_size, null, 0, c.PA_SEEK_RELATIVE) != 0) {
-                if (std.debug.runtime_safety) unreachable;
-                return;
-            }
-
-            frames_left -= chunk_size;
+        if (lib.pa_stream_write(self.stream, self.write_ptr, frames_left, null, 0, c.PA_SEEK_RELATIVE) != 0) {
+            if (std.debug.runtime_safety) unreachable;
+            return;
         }
     }
 
@@ -616,7 +611,7 @@ pub fn fromPAChannelPos(pos: c.pa_channel_position_t) !main.Channel.Id {
         c.PA_CHANNEL_POSITION_SIDE_RIGHT => .side_right,
 
         // TODO: .front_center?
-        c.PA_CHANNEL_POSITION_AUX0...c.PA_CHANNEL_POSITION_AUX31 => error.Invalid,
+        c.PA_CHANNEL_POSITION_AUX0...c.PA_CHANNEL_POSITION_AUX31 => .front_center,
 
         c.PA_CHANNEL_POSITION_TOP_CENTER => .top_center,
         c.PA_CHANNEL_POSITION_TOP_FRONT_LEFT => .top_front_left,
