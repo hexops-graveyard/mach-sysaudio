@@ -327,7 +327,7 @@ pub const Context = struct {
         const sample_rate = device.sample_rate.clamp(options.sample_rate);
 
         const sample_spec = c.pa_sample_spec{
-            .format = toPAFormat(format) catch unreachable,
+            .format = toPAFormat(format),
             .rate = sample_rate,
             .channels = @intCast(u5, device.channels.len),
         };
@@ -625,7 +625,7 @@ pub fn fromPAChannelPos(pos: c.pa_channel_position_t) !main.Channel.Id {
     };
 }
 
-pub fn toPAFormat(format: main.Format) !c.pa_sample_format_t {
+pub fn toPAFormat(format: main.Format) c.pa_sample_format_t {
     return switch (format) {
         .u8 => c.PA_SAMPLE_U8,
         .i16 => if (is_little) c.PA_SAMPLE_S16LE else c.PA_SAMPLE_S16BE,
@@ -633,8 +633,6 @@ pub fn toPAFormat(format: main.Format) !c.pa_sample_format_t {
         .i24_4b => if (is_little) c.PA_SAMPLE_S24_32LE else c.PA_SAMPLE_S24_32BE,
         .i32 => if (is_little) c.PA_SAMPLE_S32LE else c.PA_SAMPLE_S32BE,
         .f32 => if (is_little) c.PA_SAMPLE_FLOAT32LE else c.PA_SAMPLE_FLOAT32BE,
-
-        .i8 => error.Invalid,
     };
 }
 

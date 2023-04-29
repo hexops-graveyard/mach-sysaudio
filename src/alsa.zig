@@ -402,10 +402,7 @@ pub const Context = struct {
 
                         var fmt_arr = std.ArrayList(main.Format).init(self.allocator);
                         inline for (std.meta.tags(main.Format)) |format| {
-                            if (lib.snd_pcm_format_mask_test(
-                                fmt_mask,
-                                toAlsaFormat(format) catch unreachable,
-                            ) != 0) {
+                            if (lib.snd_pcm_format_mask_test(fmt_mask, toAlsaFormat(format)) != 0) {
                                 try fmt_arr.append(format);
                             }
                         }
@@ -673,10 +670,9 @@ pub fn modeToStream(mode: main.Device.Mode) c_uint {
     };
 }
 
-pub fn toAlsaFormat(format: main.Format) !c.snd_pcm_format_t {
+pub fn toAlsaFormat(format: main.Format) c.snd_pcm_format_t {
     return switch (format) {
         .u8 => c.SND_PCM_FORMAT_U8,
-        .i8 => c.SND_PCM_FORMAT_S8,
         .i16 => if (is_little) c.SND_PCM_FORMAT_S16_LE else c.SND_PCM_FORMAT_S16_BE,
         .i24 => if (is_little) c.SND_PCM_FORMAT_S24_3LE else c.SND_PCM_FORMAT_S24_3BE,
         .i24_4b => if (is_little) c.SND_PCM_FORMAT_S24_LE else c.SND_PCM_FORMAT_S24_BE,
