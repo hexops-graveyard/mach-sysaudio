@@ -13,11 +13,7 @@ jobs:
       - name: Setup Zig
         run: |
           sudo apt install xz-utils
-<<<<<<< HEAD
           sudo sh -c 'wget -c https://pkg.machengine.org/zig/zig-linux-x86_64-0.11.0-dev.3883+7166407d8.tar.xz -O - | tar -xJ --strip-components=1 -C /usr/local/bin'
-=======
-          sudo sh -c 'wget -c https://ziglang.org/builds/zig-linux-x86_64-0.11.0-dev.3947+89396ff02.tar.xz -O - | tar -xJ --strip-components=1 -C /usr/local/bin'
->>>>>>> 41848f608e9375b48705c3bb72814bbaf3d24605
       - name: build
         run: zig build
       - name: test
@@ -32,14 +28,10 @@ jobs:
       - name: Setup Zig
         run: |
           $ProgressPreference = 'SilentlyContinue'
-<<<<<<< HEAD
           Invoke-WebRequest -Uri "https://pkg.machengine.org/zig/zig-windows-x86_64-0.11.0-dev.3883+7166407d8.zip" -OutFile "C:\zig.zip"
-=======
-          Invoke-WebRequest -Uri "https://ziglang.org/builds/zig-windows-x86_64-0.11.0-dev.3947+89396ff02.zip" -OutFile "C:\zig.zip"
->>>>>>> 41848f608e9375b48705c3bb72814bbaf3d24605
           cd C:\
           7z x zig.zip
-          Add-Content $env:GITHUB_PATH "C:\zig-windows-x86_64-0.11.0-dev.3947+89396ff02\"
+          Add-Content $env:GITHUB_PATH "C:\zig-windows-x86_64-0.11.0-dev.3883+7166407d8\"
       - name: build
         run: zig build
       - name: test
@@ -54,11 +46,7 @@ jobs:
       - name: Setup Zig
         run: |
           brew install xz
-<<<<<<< HEAD
           sudo sh -c 'wget -c https://pkg.machengine.org/zig/zig-macos-x86_64-0.11.0-dev.3883+7166407d8.tar.xz -O - | tar -xJ --strip-components=1 -C /usr/local/bin'
-=======
-          sudo sh -c 'wget -c https://ziglang.org/builds/zig-macos-x86_64-0.11.0-dev.3947+89396ff02.tar.xz -O - | tar -xJ --strip-components=1 -C /usr/local/bin'
->>>>>>> 41848f608e9375b48705c3bb72814bbaf3d24605
       - name: build
         run: zig build
       - name: test
