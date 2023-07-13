@@ -98,6 +98,16 @@ pub const Context = struct {
             },
         };
     }
+
+    pub fn createRecorder(self: Context, device: Device, readFn: ReadFn, options: StreamOptions) CreateStreamError!Recorder {
+        std.debug.assert(device.mode == .capture);
+
+        return .{
+            .data = switch (self.data) {
+                inline else => |b| try b.createRecorder(device, readFn, options),
+            },
+        };
+    }
 };
 
 pub const StreamOptions = struct {
@@ -118,6 +128,8 @@ pub const MediaRole = enum {
 // TODO: `*Player` instead `*anyopaque`
 // https://github.com/ziglang/zig/issues/12325
 pub const WriteFn = *const fn (user_data: ?*anyopaque, frame_count_max: usize) void;
+// TODO: `*Recorder` instead `*anyopaque`
+pub const ReadFn = *const fn (user_data: ?*anyopaque, frame_count_max: usize) void;
 
 pub const Player = struct {
     data: backends.BackendPlayer,
@@ -223,8 +235,9 @@ pub const Player = struct {
             .i24 => std.mem.bytesAsValue(i24, ptr[0..@sizeOf(i24)]).* = switch (@TypeOf(sample)) {
                 i24 => sample,
                 u8 => unsignedToSigned(i24, sample),
-                // i8, i16, i32 => signedToSigned(i24, sample),
-                f32 => floatToSigned(i24, sample),
+                i8, i16, i32 => signedToSigned(i24, sample),
+                // TODO: uncomment once https://github.com/ziglang/zig/issues/16390 resolved
+                // f32 => floatToSigned(i24, sample),
                 else => unreachable,
             },
             .i24_4b => @panic("TODO"),
@@ -245,10 +258,11 @@ pub const Player = struct {
     }
 
     pub fn sampleRate(self: Player) u24 {
-        return if (@hasField(Backend, "jack")) switch (self.data) {
-            .jack => |b| b.sampleRate(),
-            inline else => |b| b.sample_rate,
-        } else switch (self.data) {
+        // return if (@hasField(Backend, "jack")) switch (self.data) {
+        //     .jack => |b| b.sampleRate(),
+        //     inline else => |b| b.sample_rate,
+        // } else
+        return switch (self.data) {
             inline else => |b| b.sample_rate,
         };
     }
@@ -272,6 +286,167 @@ pub const Player = struct {
     }
 };
 
+pub const Recorder = struct {
+    data: backends.BackendRecorder,
+
+    pub fn deinit(self: Recorder) void {
+        return switch (self.data) {
+            inline else => |b| b.deinit(),
+        };
+    }
+
+    pub const StartError = error{
+        CannotRecord,
+        OutOfMemory,
+        SystemResources,
+    };
+
+    pub fn start(self: Recorder) StartError!void {
+        return switch (self.data) {
+            inline else => |b| b.start(),
+        };
+    }
+
+    pub const RecordError = error{
+        CannotRecord,
+        OutOfMemory,
+    };
+
+    pub fn record(self: Recorder) RecordError!void {
+        return switch (self.data) {
+            inline else => |b| b.record(),
+        };
+    }
+
+    pub const PauseError = error{
+        CannotPause,
+        OutOfMemory,
+    };
+
+    pub fn pause(self: Recorder) PauseError!void {
+        return switch (self.data) {
+            inline else => |b| b.pause(),
+        };
+    }
+
+    pub fn paused(self: Recorder) bool {
+        return switch (self.data) {
+            inline else => |b| b.paused(),
+        };
+    }
+
+    pub const SetVolumeError = error{
+        CannotSetVolume,
+    };
+
+    // confidence interval (±) depends on the device
+    pub fn setVolume(self: Recorder, vol: f32) SetVolumeError!void {
+        std.debug.assert(vol <= 1.0);
+        return switch (self.data) {
+            inline else => |b| b.setVolume(vol),
+        };
+    }
+
+    pub const GetVolumeError = error{
+        CannotGetVolume,
+    };
+
+    // confidence interval (±) depends on the device
+    pub fn volume(self: Recorder) GetVolumeError!f32 {
+        return switch (self.data) {
+            inline else => |b| b.volume(),
+        };
+    }
+
+    pub fn readAll(self: Recorder, frame: usize, comptime T: type, samples: []T) void {
+        for (self.channels(), samples) |ch, *sample|
+            sample.* = self.read(ch, frame, T);
+    }
+
+    pub fn read(self: Recorder, channel: Channel, frame: usize, comptime T: type) T {
+        switch (T) {
+            u8, i8, i16, i24, i32, f32 => {},
+            else => @compileError(
+                \\invalid sample type. supported types are:
+                \\u8, i8, i16, i24, i32, f32
+            ),
+        }
+
+        var ptr = channel.ptr + frame * self.readStep();
+        switch (self.format()) {
+            .u8 => {
+                const sample = std.mem.bytesAsValue(u8, ptr[0..@sizeOf(u8)]).*;
+                return switch (T) {
+                    u8 => sample,
+                    i8, i16, i24, i32 => unsignedToSigned(T, sample),
+                    f32 => unsignedToFloat(T, sample),
+                    else => unreachable,
+                };
+            },
+            .i16 => {
+                const sample = std.mem.bytesAsValue(i16, ptr[0..@sizeOf(i16)]).*;
+                return switch (T) {
+                    i16 => sample,
+                    u8 => signedToUnsigned(T, sample),
+                    i8, i24, i32 => signedToSigned(T, sample),
+                    f32 => signedToFloat(T, sample),
+                    else => unreachable,
+                };
+            },
+            .i24 => {
+                const sample = std.mem.bytesAsValue(i24, ptr[0..@sizeOf(i24)]).*;
+                return switch (T) {
+                    i24 => sample,
+                    u8 => signedToUnsigned(T, sample),
+                    i8, i16, i32 => signedToSigned(T, sample),
+                    // f32 => signedToFloat(T, sample),
+                    else => unreachable,
+                };
+            },
+            .i24_4b => @panic("TODO"),
+            .i32 => {
+                const sample = std.mem.bytesAsValue(i32, ptr[0..@sizeOf(i32)]).*;
+                return switch (T) {
+                    i32 => sample,
+                    u8 => signedToUnsigned(T, sample),
+                    i8, i16, i24 => signedToSigned(T, sample),
+                    f32 => signedToFloat(T, sample),
+                    else => unreachable,
+                };
+            },
+            .f32 => {
+                const sample = std.mem.bytesAsValue(f32, ptr[0..@sizeOf(f32)]).*;
+                return switch (T) {
+                    f32 => sample,
+                    u8 => floatToUnsigned(T, sample),
+                    i8, i16, i32 => floatToSigned(T, sample),
+                    // TODO: uncomment once https://github.com/ziglang/zig/issues/16390 resolved
+                    // i24 => floatToSigned(T, sample),
+                    else => unreachable,
+                };
+            },
+        }
+    }
+
+    pub fn channels(self: Recorder) []Channel {
+        return switch (self.data) {
+            inline else => |b| b.channels,
+        };
+    }
+
+    pub fn format(self: Recorder) Format {
+        return switch (self.data) {
+            inline else => |b| b.format,
+        };
+    }
+
+    pub fn readStep(self: Recorder) u8 {
+        return switch (self.data) {
+            inline else => |b| b.read_step,
+        };
+    }
+};
+
 fn unsignedToSigned(comptime T: type, sample: anytype) T {
     const half = 1 << (@bitSizeOf(@TypeOf(sample)) - 1);
     const trunc = @bitSizeOf(T) - @bitSizeOf(@TypeOf(sample));
@@ -291,7 +466,7 @@ fn signedToSigned(comptime T: type, sample: anytype) T {
 fn signedToUnsigned(comptime T: type, sample: anytype) T {
     const half = 1 << (@bitSizeOf(T) - 1);
     const trunc = @bitSizeOf(@TypeOf(sample)) - @bitSizeOf(T);
-    return @as(T, @intCast((sample >> trunc) + half));
+    return @intCast((sample >> trunc) + half);
 }
 
 fn signedToFloat(comptime T: type, sample: anytype) T {
@@ -300,19 +475,18 @@ fn signedToFloat(comptime T: type, sample: anytype) T {
 }
 
 fn floatToSigned(comptime T: type, sample: f64) T {
-    return @as(T, @intFromFloat(sample * std.math.maxInt(T)));
+    return @intFromFloat(sample * std.math.maxInt(T));
 }
 
 fn floatToUnsigned(comptime T: type, sample: f64) T {
     const half = 1 << @bitSizeOf(T) - 1;
-    return @as(T, @intFromFloat(sample * (half - 1) + half));
+    return @intFromFloat(sample * (half - 1) + half);
 }
 
 pub const Device = struct {
     id: [:0]const u8,
     name: [:0]const u8,
     mode: Mode,
-    // NOTE(haze): we should elaborate on the `channels` field and seperate them into input and output channels
     channels: []Channel,
     formats: []const Format,
     sample_rate: util.Range(u24),

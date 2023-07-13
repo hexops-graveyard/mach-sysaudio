@@ -14,10 +14,10 @@ pub const DevicesInfo = struct {
         };
     }
 
-    pub fn clear(self: *DevicesInfo, allocator: std.mem.Allocator) void {
+    pub fn clear(self: *DevicesInfo) void {
         self.default_output = null;
         self.default_input = null;
-        self.list.clearAndFree(allocator);
+        self.list.clearRetainingCapacity();
     }
 
     pub fn get(self: DevicesInfo, i: usize) main.Device {
@@ -28,7 +28,14 @@ pub const DevicesInfo = struct {
         const index = switch (mode) {
             .playback => self.default_output,
             .capture => self.default_input,
-        } orelse return null;
+        } orelse {
+            for (self.list.items) |device| {
+                if (device.mode == mode) {
+                    return device;
+                }
+            }
+            return null;
+        };
         return self.get(index);
     }
 
