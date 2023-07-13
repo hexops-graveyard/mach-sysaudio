@@ -7,9 +7,8 @@ pub fn main() !void {
     var timer = try std.time.Timer.start();
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
 
-    var ctx = try sysaudio.Context.init(null, allocator, .{ .deviceChangeFn = deviceChange });
+    var ctx = try sysaudio.Context.init(null, gpa.allocator(), .{ .deviceChangeFn = deviceChange });
     std.log.info("Took {} to initialize the context...", .{std.fmt.fmtDuration(timer.lap())});
     defer ctx.deinit();
     try ctx.refresh();
@@ -62,5 +61,5 @@ fn writeCallback(_: ?*anyopaque, frames: usize) void {
 }
 
 fn deviceChange(_: ?*anyopaque) void {
-    std.debug.print("Device change detected!\n", .{});
+    std.log.info("device change detected!", .{});
 }
