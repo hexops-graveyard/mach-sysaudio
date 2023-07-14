@@ -54,7 +54,7 @@ pub const Context = struct {
     pub fn refresh(self: *Context) !void {
         for (self.devices_info.list.items) |d|
             freeDevice(self.allocator, d);
-        self.devices_info.clear(self.allocator);
+        self.devices_info.clear();
 
         try self.devices_info.list.append(self.allocator, dummy_playback);
         try self.devices_info.list.append(self.allocator, dummy_capture);
@@ -90,6 +90,21 @@ pub const Context = struct {
             .write_step = 0,
         };
         return .{ .dummy = player };
+    }
+
+    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.BackendRecorder {
+        _ = readFn;
+        var recorder = try self.allocator.create(Recorder);
+        recorder.* = .{
+            .allocator = self.allocator,
+            .is_paused = false,
+            .vol = 1.0,
+            .channels = device.channels,
+            .format = options.format,
+            .sample_rate = options.sample_rate,
+            .read_step = 0,
+        };
+        return .{ .dummy = recorder };
     }
 };
 
@@ -128,6 +143,45 @@ pub const Player = struct {
     }
 
     pub fn volume(self: Player) !f32 {
+        return self.vol;
+    }
+};
+
+pub const Recorder = struct {
+    allocator: std.mem.Allocator,
+    is_paused: bool,
+    vol: f32,
+
+    channels: []main.Channel,
+    format: main.Format,
+    sample_rate: u24,
+    read_step: u8,
+
+    pub fn deinit(self: *Recorder) void {
+        self.allocator.destroy(self);
+    }
+
+    pub fn start(self: Recorder) !void {
+        _ = self;
+    }
+
+    pub fn record(self: *Recorder) !void {
+        self.is_paused = false;
+    }
+
+    pub fn pause(self: *Recorder) !void {
+        self.is_paused = true;
+    }
+
+    pub fn paused(self: Recorder) bool {
+        return self.is_paused;
+    }
+
+    pub fn setVolume(self: *Recorder, vol: f32) !void {
+        self.vol = vol;
+    }
+
+    pub fn volume(self: Recorder) !f32 {
         return self.vol;
     }
 };
