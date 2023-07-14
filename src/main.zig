@@ -258,11 +258,10 @@ pub const Player = struct {
     }
 
     pub fn sampleRate(self: Player) u24 {
-        // return if (@hasField(Backend, "jack")) switch (self.data) {
-        //     .jack => |b| b.sampleRate(),
-        //     inline else => |b| b.sample_rate,
-        // } else
-        return switch (self.data) {
+        return if (@hasField(Backend, "jack")) switch (self.data) {
+            .jack => |b| b.sampleRate(),
+            inline else => |b| b.sample_rate,
+        } else switch (self.data) {
             inline else => |b| b.sample_rate,
         };
     }
