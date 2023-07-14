@@ -7,49 +7,36 @@ const main = @import("main.zig");
 const backends = @import("backends.zig");
 const util = @import("util.zig");
 
-const lib = struct {
-    var handle: std.DynLib = undefined;
+var lib: Lib = undefined;
+const Lib = struct {
+    handle: std.DynLib = undefined,
 
-    var pw_init: *const fn ([*c]c_int, [*c][*c][*c]u8) callconv(.C) void = undefined;
-    var pw_deinit: *const fn () callconv(.C) void = undefined;
-    var pw_thread_loop_new: *const fn ([*c]const u8, [*c]const c.spa_dict) callconv(.C) ?*c.pw_thread_loop = undefined;
-    var pw_thread_loop_destroy: *const fn (?*c.pw_thread_loop) callconv(.C) void = undefined;
-    var pw_thread_loop_start: *const fn (?*c.pw_thread_loop) callconv(.C) c_int = undefined;
-    var pw_thread_loop_stop: *const fn (?*c.pw_thread_loop) callconv(.C) void = undefined;
-    var pw_thread_loop_signal: *const fn (?*c.pw_thread_loop, bool) callconv(.C) void = undefined;
-    var pw_thread_loop_wait: *const fn (?*c.pw_thread_loop) callconv(.C) void = undefined;
-    var pw_thread_loop_lock: *const fn (?*c.pw_thread_loop) callconv(.C) void = undefined;
-    var pw_thread_loop_unlock: *const fn (?*c.pw_thread_loop) callconv(.C) void = undefined;
-    var pw_thread_loop_get_loop: *const fn (?*c.pw_thread_loop) callconv(.C) [*c]c.pw_loop = undefined;
-    var pw_properties_new: *const fn ([*c]const u8, ...) callconv(.C) [*c]c.pw_properties = undefined;
-    var pw_stream_new_simple: *const fn ([*c]c.pw_loop, [*c]const u8, [*c]c.pw_properties, [*c]const c.pw_stream_events, ?*anyopaque) callconv(.C) ?*c.pw_stream = undefined;
-    var pw_stream_destroy: *const fn (?*c.pw_stream) callconv(.C) void = undefined;
-    var pw_stream_connect: *const fn (?*c.pw_stream, c.spa_direction, u32, c.pw_stream_flags, [*c][*c]const c.spa_pod, u32) callconv(.C) c_int = undefined;
-    var pw_stream_queue_buffer: *const fn (?*c.pw_stream, [*c]c.pw_buffer) callconv(.C) c_int = undefined;
-    var pw_stream_dequeue_buffer: *const fn (?*c.pw_stream) callconv(.C) [*c]c.pw_buffer = undefined;
-    var pw_stream_get_state: *const fn (?*c.pw_stream, [*c][*c]const u8) callconv(.C) c.pw_stream_state = undefined;
+    pw_init: *const fn ([*c]c_int, [*c][*c][*c]u8) callconv(.C) void = undefined,
+    pw_deinit: *const fn () callconv(.C) void = undefined,
+    pw_thread_loop_new: *const fn ([*c]const u8, [*c]const c.spa_dict) callconv(.C) ?*c.pw_thread_loop = undefined,
+    pw_thread_loop_destroy: *const fn (?*c.pw_thread_loop) callconv(.C) void = undefined,
+    pw_thread_loop_start: *const fn (?*c.pw_thread_loop) callconv(.C) c_int = undefined,
+    pw_thread_loop_stop: *const fn (?*c.pw_thread_loop) callconv(.C) void = undefined,
+    pw_thread_loop_signal: *const fn (?*c.pw_thread_loop, bool) callconv(.C) void = undefined,
+    pw_thread_loop_wait: *const fn (?*c.pw_thread_loop) callconv(.C) void = undefined,
+    pw_thread_loop_lock: *const fn (?*c.pw_thread_loop) callconv(.C) void = undefined,
+    pw_thread_loop_unlock: *const fn (?*c.pw_thread_loop) callconv(.C) void = undefined,
+    pw_thread_loop_get_loop: *const fn (?*c.pw_thread_loop) callconv(.C) [*c]c.pw_loop = undefined,
+    pw_properties_new: *const fn ([*c]const u8, ...) callconv(.C) [*c]c.pw_properties = undefined,
+    pw_stream_new_simple: *const fn ([*c]c.pw_loop, [*c]const u8, [*c]c.pw_properties, [*c]const c.pw_stream_events, ?*anyopaque) callconv(.C) ?*c.pw_stream = undefined,
+    pw_stream_destroy: *const fn (?*c.pw_stream) callconv(.C) void = undefined,
+    pw_stream_connect: *const fn (?*c.pw_stream, c.spa_direction, u32, c.pw_stream_flags, [*c][*c]const c.spa_pod, u32) callconv(.C) c_int = undefined,
+    pw_stream_queue_buffer: *const fn (?*c.pw_stream, [*c]c.pw_buffer) callconv(.C) c_int = undefined,
+    pw_stream_dequeue_buffer: *const fn (?*c.pw_stream) callconv(.C) [*c]c.pw_buffer = undefined,
+    pw_stream_get_state: *const fn (?*c.pw_stream, [*c][*c]const u8) callconv(.C) c.pw_stream_state = undefined,
 
     pub fn load() !void {
-        handle = std.DynLib.openZ("libpipewire-0.3.so") catch return error.LibraryNotFound;
-
-        pw_init = handle.lookup(@TypeOf(pw_init), "pw_init") orelse return error.SymbolLookup;
-        pw_deinit = handle.lookup(@TypeOf(pw_deinit), "pw_deinit") orelse return error.SymbolLookup;
-        pw_thread_loop_new = handle.lookup(@TypeOf(pw_thread_loop_new), "pw_thread_loop_new") orelse return error.SymbolLookup;
-        pw_thread_loop_destroy = handle.lookup(@TypeOf(pw_thread_loop_destroy), "pw_thread_loop_destroy") orelse return error.SymbolLookup;
-        pw_thread_loop_start = handle.lookup(@TypeOf(pw_thread_loop_start), "pw_thread_loop_start") orelse return error.SymbolLookup;
-        pw_thread_loop_stop = handle.lookup(@TypeOf(pw_thread_loop_stop), "pw_thread_loop_stop") orelse return error.SymbolLookup;
-        pw_thread_loop_signal = handle.lookup(@TypeOf(pw_thread_loop_signal), "pw_thread_loop_signal") orelse return error.SymbolLookup;
-        pw_thread_loop_wait = handle.lookup(@TypeOf(pw_thread_loop_wait), "pw_thread_loop_wait") orelse return error.SymbolLookup;
-        pw_thread_loop_lock = handle.lookup(@TypeOf(pw_thread_loop_lock), "pw_thread_loop_lock") orelse return error.SymbolLookup;
-        pw_thread_loop_unlock = handle.lookup(@TypeOf(pw_thread_loop_unlock), "pw_thread_loop_unlock") orelse return error.SymbolLookup;
-        pw_thread_loop_get_loop = handle.lookup(@TypeOf(pw_thread_loop_get_loop), "pw_thread_loop_get_loop") orelse return error.SymbolLookup;
-        pw_properties_new = handle.lookup(@TypeOf(pw_properties_new), "pw_properties_new") orelse return error.SymbolLookup;
-        pw_stream_new_simple = handle.lookup(@TypeOf(pw_stream_new_simple), "pw_stream_new_simple") orelse return error.SymbolLookup;
-        pw_stream_destroy = handle.lookup(@TypeOf(pw_stream_destroy), "pw_stream_destroy") orelse return error.SymbolLookup;
-        pw_stream_connect = handle.lookup(@TypeOf(pw_stream_connect), "pw_stream_connect") orelse return error.SymbolLookup;
-        pw_stream_queue_buffer = handle.lookup(@TypeOf(pw_stream_queue_buffer), "pw_stream_queue_buffer") orelse return error.SymbolLookup;
-        pw_stream_dequeue_buffer = handle.lookup(@TypeOf(pw_stream_dequeue_buffer), "pw_stream_dequeue_buffer") orelse return error.SymbolLookup;
-        pw_stream_get_state = handle.lookup(@TypeOf(pw_stream_get_state), "pw_stream_get_state") orelse return error.SymbolLookup;
+        lib.handle = std.DynLib.openZ("libpipewire-0.3.so") catch return error.LibraryNotFound;
+        inline for (@typeInfo(Lib).Struct.fields[1..]) |field| {
+            const name = std.fmt.comptimePrint("{s}\x00", .{field.name});
+            const name_z: [:0]const u8 = @ptrCast(name[0 .. name.len - 1]);
+            @field(lib, field.name) = lib.handle.lookup(field.type, name_z) orelse return error.SymbolLookup;
+        }
     }
 };
 
@@ -91,7 +78,7 @@ pub const Context = struct {
     };
 
     pub fn init(allocator: std.mem.Allocator, options: main.Context.Options) !backends.BackendContext {
-        try lib.load();
+        try Lib.load();
 
         lib.pw_init(null, null);
 
@@ -138,7 +125,7 @@ pub const Context = struct {
     pub fn refresh(self: *Context) !void {
         for (self.devices_info.list.items) |d|
             freeDevice(self.allocator, d);
-        self.devices_info.clear(self.allocator);
+        self.devices_info.clear();
 
         try self.devices_info.list.append(self.allocator, default_playback);
         try self.devices_info.list.append(self.allocator, default_capture);
@@ -163,24 +150,7 @@ pub const Context = struct {
         return self.devices_info.default(mode);
     }
 
-    const stream_events = c.pw_stream_events{
-        .version = c.PW_VERSION_STREAM_EVENTS,
-        .process = Player.processCb,
-        .destroy = null,
-        .state_changed = Player.stateChangedCb,
-        .control_info = null,
-        .io_changed = null,
-        .param_changed = null,
-        .add_buffer = null,
-        .remove_buffer = null,
-        .drained = null,
-        .command = null,
-        .trigger_done = null,
-    };
-
     pub fn createPlayer(self: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.BackendPlayer {
-        const thread = lib.pw_thread_loop_new(device.id, null) orelse return error.SystemResources;
-
         const media_role = switch (options.media_role) {
             .default => "Screen",
             .game => "Game",
@@ -211,9 +181,25 @@ pub const Context = struct {
             @as(*allowzero u0, @ptrFromInt(0)),
         );
 
+        const stream_events = c.pw_stream_events{
+            .version = c.PW_VERSION_STREAM_EVENTS,
+            .process = Player.processCb,
+            .destroy = null,
+            .state_changed = stateChangedCb,
+            .control_info = null,
+            .io_changed = null,
+            .param_changed = null,
+            .add_buffer = null,
+            .remove_buffer = null,
+            .drained = null,
+            .command = null,
+            .trigger_done = null,
+        };
+
         var player = try self.allocator.create(Player);
         errdefer self.allocator.destroy(player);
 
+        const thread = lib.pw_thread_loop_new(device.id, null) orelse return error.SystemResources;
         const stream = lib.pw_stream_new_simple(
             lib.pw_thread_loop_get_loop(thread),
             "audio-src",
@@ -269,7 +255,124 @@ pub const Context = struct {
         };
         return .{ .pipewire = player };
     }
+
+    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.BackendRecorder {
+        const media_role = switch (options.media_role) {
+            .default => "Screen",
+            .game => "Game",
+            .music => "Music",
+            .movie => "Movie",
+            .communication => "Communication",
+        };
+
+        var buf: [8]u8 = undefined;
+        const audio_rate = std.fmt.bufPrintZ(&buf, "{d}", .{options.sample_rate}) catch unreachable;
+
+        const props = lib.pw_properties_new(
+            c.PW_KEY_MEDIA_TYPE,
+            "Audio",
+
+            c.PW_KEY_MEDIA_CATEGORY,
+            "Capture",
+
+            c.PW_KEY_MEDIA_ROLE,
+            media_role.ptr,
+
+            c.PW_KEY_MEDIA_NAME,
+            self.app_name.ptr,
+
+            c.PW_KEY_AUDIO_RATE,
+            audio_rate.ptr,
+
+            @as(*allowzero u0, @ptrFromInt(0)),
+        );
+
+        const stream_events = c.pw_stream_events{
+            .version = c.PW_VERSION_STREAM_EVENTS,
+            .process = Recorder.processCb,
+            .destroy = null,
+            .state_changed = stateChangedCb,
+            .control_info = null,
+            .io_changed = null,
+            .param_changed = null,
+            .add_buffer = null,
+            .remove_buffer = null,
+            .drained = null,
+            .command = null,
+            .trigger_done = null,
+        };
+
+        var recorder = try self.allocator.create(Recorder);
+        errdefer self.allocator.destroy(recorder);
+
+        const thread = lib.pw_thread_loop_new(device.id, null) orelse return error.SystemResources;
+        const stream = lib.pw_stream_new_simple(
+            lib.pw_thread_loop_get_loop(thread),
+            "audio-capture",
+            props,
+            &stream_events,
+            recorder,
+        ) orelse return error.OpeningDevice;
+
+        var builder_buf: [256]u8 = undefined;
+        var pod_builder = c.spa_pod_builder{
+            .data = &builder_buf,
+            .size = builder_buf.len,
+            ._padding = 0,
+            .state = .{
+                .offset = 0,
+                .flags = 0,
+                .frame = null,
+            },
+            .callbacks = .{ .funcs = null, .data = null },
+        };
+        var info = c.spa_audio_info_raw{
+            .format = c.SPA_AUDIO_FORMAT_F32,
+            .channels = @as(u32, @intCast(device.channels.len)),
+            .rate = options.sample_rate,
+            .flags = 0,
+            .position = undefined,
+        };
+        var params = [1][*c]c.spa_pod{
+            sysaudio_spa_format_audio_raw_build(&pod_builder, c.SPA_PARAM_EnumFormat, &info),
+        };
+
+        if (lib.pw_stream_connect(
+            stream,
+            c.PW_DIRECTION_INPUT,
+            c.PW_ID_ANY,
+            c.PW_STREAM_FLAG_AUTOCONNECT | c.PW_STREAM_FLAG_MAP_BUFFERS | c.PW_STREAM_FLAG_RT_PROCESS,
+            &params,
+            params.len,
+        ) < 0) return error.OpeningDevice;
+
+        recorder.* = .{
+            .allocator = self.allocator,
+            .thread = thread,
+            .stream = stream,
+            .is_paused = .{ .value = false },
+            .vol = 1.0,
+            .readFn = readFn,
+            .user_data = options.user_data,
+            .channels = device.channels,
+            .format = .f32,
+            .sample_rate = options.sample_rate,
+            .read_step = main.Format.frameSize(.f32, device.channels.len),
+        };
+        return .{ .pipewire = recorder };
+    }
 };
+
+fn stateChangedCb(self_opaque: ?*anyopaque, old_state: c.pw_stream_state, state: c.pw_stream_state, err: [*c]const u8) callconv(.C) void {
+    _ = old_state;
+    _ = err;
+
+    var self = @as(*Player, @ptrCast(@alignCast(self_opaque.?)));
+
+    if (state == c.PW_STREAM_STATE_STREAMING or state == c.PW_STREAM_STATE_ERROR) {
+        lib.pw_thread_loop_signal(self.thread, false);
+    }
+}
 
 pub const Player = struct {
     allocator: std.mem.Allocator,
@@ -284,17 +387,6 @@ pub const Player = struct {
     format: main.Format,
     sample_rate: u24,
     write_step: u8,
-
-    pub fn stateChangedCb(self_opaque: ?*anyopaque, old_state: c.pw_stream_state, state: c.pw_stream_state, err: [*c]const u8) callconv(.C) void {
-        _ = old_state;
-        _ = err;
-
-        var self = @as(*Player, @ptrCast(@alignCast(self_opaque.?)));
-
-        if (state == c.PW_STREAM_STATE_STREAMING or state == c.PW_STREAM_STATE_ERROR) {
-            lib.pw_thread_loop_signal(self.thread, false);
-        }
-    }
 
     pub fn processCb(self_opaque: ?*anyopaque) callconv(.C) void {
         var self = @as(*Player, @ptrCast(@alignCast(self_opaque.?)));
@@ -311,14 +403,14 @@ pub const Player = struct {
         }
 
         const stride = self.format.frameSize(self.channels.len);
-        const n_frames = @min(buf.*.requested, buf.*.buffer.*.datas[0].maxsize / stride);
+        const frames = @min(buf.*.requested, buf.*.buffer.*.datas[0].maxsize / stride);
         buf.*.buffer.*.datas[0].chunk.*.stride = stride;
-        buf.*.buffer.*.datas[0].chunk.*.size = @as(u32, @intCast(n_frames * stride));
+        buf.*.buffer.*.datas[0].chunk.*.size = @intCast(frames * stride);
 
         for (self.channels, 0..) |*ch, i| {
             ch.ptr = @as([*]u8, @ptrCast(buf.*.buffer.*.datas[0].data.?)) + self.format.frameSize(i);
         }
-        self.writeFn(self.user_data, n_frames);
+        self.writeFn(self.user_data, frames);
     }
 
     pub fn deinit(self: *Player) void {
@@ -357,6 +449,83 @@ pub const Player = struct {
     }
 
     pub fn volume(self: Player) !f32 {
+        return self.vol;
+    }
+};
+
+pub const Recorder = struct {
+    allocator: std.mem.Allocator,
+    thread: *c.pw_thread_loop,
+    stream: *c.pw_stream,
+    is_paused: std.atomic.Atomic(bool),
+    vol: f32,
+    readFn: main.ReadFn,
+    user_data: ?*anyopaque,
+
+    channels: []main.Channel,
+    format: main.Format,
+    sample_rate: u24,
+    read_step: u8,
+
+    pub fn processCb(self_opaque: ?*anyopaque) callconv(.C) void {
+        var self = @as(*Recorder, @ptrCast(@alignCast(self_opaque.?)));
+
+        const buf = lib.pw_stream_dequeue_buffer(self.stream) orelse unreachable;
+        if (buf.*.buffer.*.datas[0].data == null) return;
+        defer _ = lib.pw_stream_queue_buffer(self.stream, buf);
+
+        buf.*.buffer.*.datas[0].chunk.*.offset = 0;
+        if (self.is_paused.load(.Unordered)) {
+            buf.*.buffer.*.datas[0].chunk.*.stride = 0;
+            buf.*.buffer.*.datas[0].chunk.*.size = 0;
+            return;
+        }
+
+        for (self.channels, 0..) |*ch, i| {
+            ch.ptr = @as([*]u8, @ptrCast(buf.*.buffer.*.datas[0].data.?)) + self.format.frameSize(i);
+        }
+
+        const stride: u32 = @intCast(buf.*.buffer.*.datas[0].chunk.*.stride);
+        const frames = buf.*.buffer.*.datas[0].chunk.*.size / stride;
+        self.readFn(self.user_data, frames);
+    }
+
+    pub fn deinit(self: *Recorder) void {
+        lib.pw_thread_loop_stop(self.thread);
+        lib.pw_thread_loop_destroy(self.thread);
+        lib.pw_stream_destroy(self.stream);
+        self.allocator.destroy(self);
+    }
+
+    pub fn start(self: *Recorder) !void {
+        if (lib.pw_thread_loop_start(self.thread) < 0) return error.SystemResources;
+
+        lib.pw_thread_loop_lock(self.thread);
+        lib.pw_thread_loop_wait(self.thread);
+        lib.pw_thread_loop_unlock(self.thread);
+
+        if (lib.pw_stream_get_state(self.stream, null) == c.PW_STREAM_STATE_ERROR) {
+            return error.CannotRecord;
+        }
+    }
+
+    pub fn record(self: *Recorder) !void {
+        self.is_paused.store(false, .Unordered);
+    }
+
+    pub fn pause(self: *Recorder) !void {
+        self.is_paused.store(true, .Unordered);
+    }
+
+    pub fn paused(self: Recorder) bool {
+        return self.is_paused.load(.Unordered);
+    }
+
+    pub fn setVolume(self: *Recorder, vol: f32) !void {
+        self.vol = vol;
+    }
+
+    pub fn volume(self: Recorder) !f32 {
         return self.vol;
     }
 };
