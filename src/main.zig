@@ -427,6 +427,15 @@ pub const Recorder = struct {
         }
     }
 
+    pub fn sampleRate(self: Recorder) u24 {
+        return if (@hasField(Backend, "jack")) switch (self.data) {
+            .jack => |b| b.sampleRate(),
+            inline else => |b| b.sample_rate,
+        } else switch (self.data) {
+            inline else => |b| b.sample_rate,
+        };
+    }
+
     pub fn channels(self: Recorder) []Channel {
         return switch (self.data) {
             inline else => |b| b.channels,
