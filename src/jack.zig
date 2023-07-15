@@ -4,59 +4,41 @@ const main = @import("main.zig");
 const backends = @import("backends.zig");
 const util = @import("util.zig");
 
-const lib = struct {
-    var handle: std.DynLib = undefined;
+var lib: Lib = undefined;
+const Lib = struct {
+    handle: std.DynLib,
 
-    var jack_free: *const fn (ptr: ?*anyopaque) callconv(.C) void = undefined;
-    var jack_set_error_function: *const fn (?*const fn ([*c]const u8) callconv(.C) void) callconv(.C) void = undefined;
-    var jack_set_info_function: *const fn (?*const fn ([*c]const u8) callconv(.C) void) callconv(.C) void = undefined;
-    var jack_client_open: *const fn ([*c]const u8, c.jack_options_t, [*c]c.jack_status_t, ...) callconv(.C) ?*c.jack_client_t = undefined;
-    var jack_client_close: *const fn (?*c.jack_client_t) callconv(.C) c_int = undefined;
-    var jack_connect: *const fn (?*c.jack_client_t, [*c]const u8, [*c]const u8) callconv(.C) c_int = undefined;
-    var jack_disconnect: *const fn (?*c.jack_client_t, [*c]const u8, [*c]const u8) callconv(.C) c_int = undefined;
-    var jack_activate: *const fn (?*c.jack_client_t) callconv(.C) c_int = undefined;
-    var jack_deactivate: *const fn (?*c.jack_client_t) callconv(.C) c_int = undefined;
-    var jack_port_by_name: *const fn (?*c.jack_client_t, [*c]const u8) callconv(.C) ?*c.jack_port_t = undefined;
-    var jack_port_register: *const fn (?*c.jack_client_t, [*c]const u8, [*c]const u8, c_ulong, c_ulong) callconv(.C) ?*c.jack_port_t = undefined;
-    var jack_set_sample_rate_callback: *const fn (?*c.jack_client_t, c.JackSampleRateCallback, ?*anyopaque) callconv(.C) c_int = undefined;
-    var jack_set_port_registration_callback: *const fn (?*c.jack_client_t, c.JackPortRegistrationCallback, ?*anyopaque) callconv(.C) c_int = undefined;
-    var jack_set_process_callback: *const fn (?*c.jack_client_t, c.JackProcessCallback, ?*anyopaque) callconv(.C) c_int = undefined;
-    var jack_set_port_rename_callback: *const fn (?*c.jack_client_t, c.JackPortRenameCallback, ?*anyopaque) callconv(.C) c_int = undefined;
-    var jack_get_sample_rate: *const fn (?*c.jack_client_t) callconv(.C) c.jack_nframes_t = undefined;
-    var jack_get_ports: *const fn (?*c.jack_client_t, [*c]const u8, [*c]const u8, c_ulong) callconv(.C) [*c][*c]const u8 = undefined;
-    var jack_port_type: *const fn (port: ?*const c.jack_port_t) callconv(.C) [*c]const u8 = undefined;
-    var jack_port_flags: *const fn (port: ?*const c.jack_port_t) callconv(.C) c_int = undefined;
-    var jack_port_name: *const fn (?*const c.jack_port_t) callconv(.C) [*c]const u8 = undefined;
-    var jack_port_get_buffer: *const fn (?*c.jack_port_t, c.jack_nframes_t) callconv(.C) ?*anyopaque = undefined;
-    var jack_port_connected_to: *const fn (?*const c.jack_port_t, [*c]const u8) callconv(.C) c_int = undefined;
-    var jack_port_type_size: *const fn () c_int = undefined;
+    jack_free: *const fn (ptr: ?*anyopaque) callconv(.C) void,
+    jack_set_error_function: *const fn (?*const fn ([*c]const u8) callconv(.C) void) callconv(.C) void,
+    jack_set_info_function: *const fn (?*const fn ([*c]const u8) callconv(.C) void) callconv(.C) void,
+    jack_client_open: *const fn ([*c]const u8, c.jack_options_t, [*c]c.jack_status_t, ...) callconv(.C) ?*c.jack_client_t,
+    jack_client_close: *const fn (?*c.jack_client_t) callconv(.C) c_int,
+    jack_connect: *const fn (?*c.jack_client_t, [*c]const u8, [*c]const u8) callconv(.C) c_int,
+    jack_disconnect: *const fn (?*c.jack_client_t, [*c]const u8, [*c]const u8) callconv(.C) c_int,
+    jack_activate: *const fn (?*c.jack_client_t) callconv(.C) c_int,
+    jack_deactivate: *const fn (?*c.jack_client_t) callconv(.C) c_int,
+    jack_port_by_name: *const fn (?*c.jack_client_t, [*c]const u8) callconv(.C) ?*c.jack_port_t,
+    jack_port_register: *const fn (?*c.jack_client_t, [*c]const u8, [*c]const u8, c_ulong, c_ulong) callconv(.C) ?*c.jack_port_t,
+    jack_set_sample_rate_callback: *const fn (?*c.jack_client_t, c.JackSampleRateCallback, ?*anyopaque) callconv(.C) c_int,
+    jack_set_port_registration_callback: *const fn (?*c.jack_client_t, c.JackPortRegistrationCallback, ?*anyopaque) callconv(.C) c_int,
+    jack_set_process_callback: *const fn (?*c.jack_client_t, c.JackProcessCallback, ?*anyopaque) callconv(.C) c_int,
+    jack_set_port_rename_callback: *const fn (?*c.jack_client_t, c.JackPortRenameCallback, ?*anyopaque) callconv(.C) c_int,
+    jack_get_sample_rate: *const fn (?*c.jack_client_t) callconv(.C) c.jack_nframes_t,
+    jack_get_ports: *const fn (?*c.jack_client_t, [*c]const u8, [*c]const u8, c_ulong) callconv(.C) [*c][*c]const u8,
+    jack_port_type: *const fn (port: ?*const c.jack_port_t) callconv(.C) [*c]const u8,
+    jack_port_flags: *const fn (port: ?*const c.jack_port_t) callconv(.C) c_int,
+    jack_port_name: *const fn (?*const c.jack_port_t) callconv(.C) [*c]const u8,
+    jack_port_get_buffer: *const fn (?*c.jack_port_t, c.jack_nframes_t) callconv(.C) ?*anyopaque,
+    jack_port_connected_to: *const fn (?*const c.jack_port_t, [*c]const u8) callconv(.C) c_int,
+    jack_port_type_size: *const fn () c_int,
 
     pub fn load() !void {
-        handle = std.DynLib.openZ("libjack.so") catch return error.LibraryNotFound;
-
-        jack_free = handle.lookup(@TypeOf(jack_free), "jack_free") orelse return error.SymbolLookup;
-        jack_set_error_function = handle.lookup(@TypeOf(jack_set_error_function), "jack_set_error_function") orelse return error.SymbolLookup;
-        jack_set_info_function = handle.lookup(@TypeOf(jack_set_info_function), "jack_set_info_function") orelse return error.SymbolLookup;
-        jack_client_open = handle.lookup(@TypeOf(jack_client_open), "jack_client_open") orelse return error.SymbolLookup;
-        jack_client_close = handle.lookup(@TypeOf(jack_client_close), "jack_client_close") orelse return error.SymbolLookup;
-        jack_connect = handle.lookup(@TypeOf(jack_connect), "jack_connect") orelse return error.SymbolLookup;
-        jack_disconnect = handle.lookup(@TypeOf(jack_disconnect), "jack_disconnect") orelse return error.SymbolLookup;
-        jack_activate = handle.lookup(@TypeOf(jack_activate), "jack_activate") orelse return error.SymbolLookup;
-        jack_deactivate = handle.lookup(@TypeOf(jack_deactivate), "jack_deactivate") orelse return error.SymbolLookup;
-        jack_port_by_name = handle.lookup(@TypeOf(jack_port_by_name), "jack_port_by_name") orelse return error.SymbolLookup;
-        jack_port_register = handle.lookup(@TypeOf(jack_port_register), "jack_port_register") orelse return error.SymbolLookup;
-        jack_set_sample_rate_callback = handle.lookup(@TypeOf(jack_set_sample_rate_callback), "jack_set_sample_rate_callback") orelse return error.SymbolLookup;
-        jack_set_port_registration_callback = handle.lookup(@TypeOf(jack_set_port_registration_callback), "jack_set_port_registration_callback") orelse return error.SymbolLookup;
-        jack_set_process_callback = handle.lookup(@TypeOf(jack_set_process_callback), "jack_set_process_callback") orelse return error.SymbolLookup;
-        jack_set_port_rename_callback = handle.lookup(@TypeOf(jack_set_port_rename_callback), "jack_set_port_rename_callback") orelse return error.SymbolLookup;
-        jack_get_sample_rate = handle.lookup(@TypeOf(jack_get_sample_rate), "jack_get_sample_rate") orelse return error.SymbolLookup;
-        jack_get_ports = handle.lookup(@TypeOf(jack_get_ports), "jack_get_ports") orelse return error.SymbolLookup;
-        jack_port_type = handle.lookup(@TypeOf(jack_port_type), "jack_port_type") orelse return error.SymbolLookup;
-        jack_port_flags = handle.lookup(@TypeOf(jack_port_flags), "jack_port_flags") orelse return error.SymbolLookup;
-        jack_port_name = handle.lookup(@TypeOf(jack_port_name), "jack_port_name") orelse return error.SymbolLookup;
-        jack_port_get_buffer = handle.lookup(@TypeOf(jack_port_get_buffer), "jack_port_get_buffer") orelse return error.SymbolLookup;
-        jack_port_connected_to = handle.lookup(@TypeOf(jack_port_connected_to), "jack_port_connected_to") orelse return error.SymbolLookup;
-        jack_port_type_size = handle.lookup(@TypeOf(jack_port_type_size), "jack_port_type_size") orelse return error.SymbolLookup;
+        lib.handle = std.DynLib.openZ("libjack.so") catch return error.LibraryNotFound;
+        inline for (@typeInfo(Lib).Struct.fields[1..]) |field| {
+            const name = std.fmt.comptimePrint("{s}\x00", .{field.name});
+            const name_z: [:0]const u8 = @ptrCast(name[0 .. name.len - 1]);
+            @field(lib, field.name) = lib.handle.lookup(field.type, name_z) orelse return error.SymbolLookup;
+        }
     }
 };
 
@@ -72,7 +54,7 @@ pub const Context = struct {
     };
 
     pub fn init(allocator: std.mem.Allocator, options: main.Context.Options) !backends.BackendContext {
-        try lib.load();
+        try Lib.load();
 
         lib.jack_set_error_function(@as(?*const fn ([*c]const u8) callconv(.C) void, @ptrCast(&util.doNothing)));
         lib.jack_set_info_function(@as(?*const fn ([*c]const u8) callconv(.C) void, @ptrCast(&util.doNothing)));

@@ -6,113 +6,73 @@ const util = @import("util.zig");
 const inotify_event = std.os.linux.inotify_event;
 const is_little = @import("builtin").cpu.arch.endian() == .Little;
 
-const lib = struct {
-    var handle: std.DynLib = undefined;
+var lib: Lib = undefined;
+const Lib = struct {
+    handle: std.DynLib,
 
-    var snd_lib_error_set_handler: *const fn (c.snd_lib_error_handler_t) callconv(.C) c_int = undefined;
-    var snd_pcm_info_malloc: *const fn ([*c]?*c.snd_pcm_info_t) callconv(.C) c_int = undefined;
-    var snd_pcm_info_free: *const fn (?*c.snd_pcm_info_t) callconv(.C) void = undefined;
-    var snd_pcm_open: *const fn ([*c]?*c.snd_pcm_t, [*c]const u8, c.snd_pcm_stream_t, c_int) callconv(.C) c_int = undefined;
-    var snd_pcm_close: *const fn (?*c.snd_pcm_t) callconv(.C) c_int = undefined;
-    var snd_pcm_state: *const fn (?*c.snd_pcm_t) callconv(.C) c.snd_pcm_state_t = undefined;
-    var snd_pcm_pause: *const fn (?*c.snd_pcm_t, c_int) callconv(.C) c_int = undefined;
-    var snd_pcm_writei: *const fn (?*c.snd_pcm_t, ?*const anyopaque, c.snd_pcm_uframes_t) callconv(.C) c.snd_pcm_sframes_t = undefined;
-    var snd_pcm_prepare: *const fn (?*c.snd_pcm_t) callconv(.C) c_int = undefined;
-    var snd_pcm_info_set_device: *const fn (?*c.snd_pcm_info_t, c_uint) callconv(.C) void = undefined;
-    var snd_pcm_info_set_subdevice: *const fn (?*c.snd_pcm_info_t, c_uint) callconv(.C) void = undefined;
-    var snd_pcm_info_get_name: *const fn (?*const c.snd_pcm_info_t) callconv(.C) [*c]const u8 = undefined;
-    var snd_pcm_info_set_stream: *const fn (?*c.snd_pcm_info_t, c.snd_pcm_stream_t) callconv(.C) void = undefined;
-    var snd_pcm_hw_free: *const fn (?*c.snd_pcm_t) callconv(.C) c_int = undefined;
-    var snd_pcm_hw_params_malloc: *const fn ([*c]?*c.snd_pcm_hw_params_t) callconv(.C) c_int = undefined;
-    var snd_pcm_hw_params_free: *const fn (?*c.snd_pcm_hw_params_t) callconv(.C) void = undefined;
-    var snd_pcm_set_params: *const fn (?*c.snd_pcm_t, c.snd_pcm_format_t, c.snd_pcm_access_t, c_uint, c_uint, c_int, c_uint) callconv(.C) c_int = undefined;
-    var snd_pcm_hw_params_any: *const fn (?*c.snd_pcm_t, ?*c.snd_pcm_hw_params_t) callconv(.C) c_int = undefined;
-    var snd_pcm_hw_params_can_pause: *const fn (?*const c.snd_pcm_hw_params_t) callconv(.C) c_int = undefined;
-    var snd_pcm_hw_params_current: *const fn (?*c.snd_pcm_t, ?*c.snd_pcm_hw_params_t) callconv(.C) c_int = undefined;
-    var snd_pcm_hw_params_get_format_mask: *const fn (?*c.snd_pcm_hw_params_t, ?*c.snd_pcm_format_mask_t) callconv(.C) void = undefined;
-    var snd_pcm_hw_params_get_rate_min: *const fn (?*const c.snd_pcm_hw_params_t, [*c]c_uint, [*c]c_int) callconv(.C) c_int = undefined;
-    var snd_pcm_hw_params_get_rate_max: *const fn (?*const c.snd_pcm_hw_params_t, [*c]c_uint, [*c]c_int) callconv(.C) c_int = undefined;
-    var snd_pcm_hw_params_get_period_size: *const fn (?*const c.snd_pcm_hw_params_t, [*c]c.snd_pcm_uframes_t, [*c]c_int) callconv(.C) c_int = undefined;
-    var snd_pcm_query_chmaps: *const fn (?*c.snd_pcm_t) callconv(.C) [*c][*c]c.snd_pcm_chmap_query_t = undefined;
-    var snd_pcm_free_chmaps: *const fn ([*c][*c]c.snd_pcm_chmap_query_t) callconv(.C) void = undefined;
-    var snd_pcm_format_mask_malloc: *const fn ([*c]?*c.snd_pcm_format_mask_t) callconv(.C) c_int = undefined;
-    var snd_pcm_format_mask_free: *const fn (?*c.snd_pcm_format_mask_t) callconv(.C) void = undefined;
-    var snd_pcm_format_mask_none: *const fn (?*c.snd_pcm_format_mask_t) callconv(.C) void = undefined;
-    var snd_pcm_format_mask_set: *const fn (?*c.snd_pcm_format_mask_t, c.snd_pcm_format_t) callconv(.C) void = undefined;
-    var snd_pcm_format_mask_test: *const fn (?*const c.snd_pcm_format_mask_t, c.snd_pcm_format_t) callconv(.C) c_int = undefined;
-    var snd_card_next: *const fn ([*c]c_int) callconv(.C) c_int = undefined;
-    var snd_ctl_open: *const fn ([*c]?*c.snd_ctl_t, [*c]const u8, c_int) callconv(.C) c_int = undefined;
-    var snd_ctl_close: *const fn (?*c.snd_ctl_t) callconv(.C) c_int = undefined;
-    var snd_ctl_pcm_next_device: *const fn (?*c.snd_ctl_t, [*c]c_int) callconv(.C) c_int = undefined;
-    var snd_ctl_pcm_info: *const fn (?*c.snd_ctl_t, ?*c.snd_pcm_info_t) callconv(.C) c_int = undefined;
-    var snd_mixer_open: *const fn ([*c]?*c.snd_mixer_t, c_int) callconv(.C) c_int = undefined;
-    var snd_mixer_close: *const fn (?*c.snd_mixer_t) callconv(.C) c_int = undefined;
-    var snd_mixer_load: *const fn (?*c.snd_mixer_t) callconv(.C) c_int = undefined;
-    var snd_mixer_attach: *const fn (?*c.snd_mixer_t, [*c]const u8) callconv(.C) c_int = undefined;
-    var snd_mixer_find_selem: *const fn (?*c.snd_mixer_t, ?*const c.snd_mixer_selem_id_t) callconv(.C) ?*c.snd_mixer_elem_t = undefined;
-    var snd_mixer_selem_register: *const fn (?*c.snd_mixer_t, [*c]c.struct_snd_mixer_selem_regopt, [*c]?*c.snd_mixer_class_t) callconv(.C) c_int = undefined;
-    var snd_mixer_selem_id_malloc: *const fn ([*c]?*c.snd_mixer_selem_id_t) callconv(.C) c_int = undefined;
-    var snd_mixer_selem_id_free: *const fn (?*c.snd_mixer_selem_id_t) callconv(.C) void = undefined;
-    var snd_mixer_selem_id_set_index: *const fn (?*c.snd_mixer_selem_id_t, c_uint) callconv(.C) void = undefined;
-    var snd_mixer_selem_id_set_name: *const fn (?*c.snd_mixer_selem_id_t, [*c]const u8) callconv(.C) void = undefined;
-    var snd_mixer_selem_set_playback_volume_all: *const fn (?*c.snd_mixer_elem_t, c_long) callconv(.C) c_int = undefined;
-    var snd_mixer_selem_get_playback_volume: *const fn (?*c.snd_mixer_elem_t, c.snd_mixer_selem_channel_id_t, [*c]c_long) callconv(.C) c_int = undefined;
-    var snd_mixer_selem_get_playback_volume_range: *const fn (?*c.snd_mixer_elem_t, [*c]c_long, [*c]c_long) callconv(.C) c_int = undefined;
-    var snd_mixer_selem_has_playback_channel: *const fn (?*c.snd_mixer_elem_t, c.snd_mixer_selem_channel_id_t) callconv(.C) c_int = undefined;
+    snd_lib_error_set_handler: *const fn (c.snd_lib_error_handler_t) callconv(.C) c_int,
+    snd_pcm_info_malloc: *const fn ([*c]?*c.snd_pcm_info_t) callconv(.C) c_int,
+    snd_pcm_info_free: *const fn (?*c.snd_pcm_info_t) callconv(.C) void,
+    snd_pcm_open: *const fn ([*c]?*c.snd_pcm_t, [*c]const u8, c.snd_pcm_stream_t, c_int) callconv(.C) c_int,
+    snd_pcm_close: *const fn (?*c.snd_pcm_t) callconv(.C) c_int,
+    snd_pcm_state: *const fn (?*c.snd_pcm_t) callconv(.C) c.snd_pcm_state_t,
+    snd_pcm_pause: *const fn (?*c.snd_pcm_t, c_int) callconv(.C) c_int,
+    snd_pcm_writei: *const fn (?*c.snd_pcm_t, ?*const anyopaque, c.snd_pcm_uframes_t) callconv(.C) c.snd_pcm_sframes_t,
+    snd_pcm_readi: *const fn (?*c.snd_pcm_t, ?*const anyopaque, c.snd_pcm_uframes_t) callconv(.C) c.snd_pcm_sframes_t,
+    snd_pcm_prepare: *const fn (?*c.snd_pcm_t) callconv(.C) c_int,
+    snd_pcm_info_set_device: *const fn (?*c.snd_pcm_info_t, c_uint) callconv(.C) void,
+    snd_pcm_info_set_subdevice: *const fn (?*c.snd_pcm_info_t, c_uint) callconv(.C) void,
+    snd_pcm_info_get_name: *const fn (?*const c.snd_pcm_info_t) callconv(.C) [*c]const u8,
+    snd_pcm_info_set_stream: *const fn (?*c.snd_pcm_info_t, c.snd_pcm_stream_t) callconv(.C) void,
+    snd_pcm_hw_free: *const fn (?*c.snd_pcm_t) callconv(.C) c_int,
+    snd_pcm_hw_params_malloc: *const fn ([*c]?*c.snd_pcm_hw_params_t) callconv(.C) c_int,
+    snd_pcm_hw_params_free: *const fn (?*c.snd_pcm_hw_params_t) callconv(.C) void,
+    snd_pcm_set_params: *const fn (?*c.snd_pcm_t, c.snd_pcm_format_t, c.snd_pcm_access_t, c_uint, c_uint, c_int, c_uint) callconv(.C) c_int,
+    snd_pcm_hw_params_any: *const fn (?*c.snd_pcm_t, ?*c.snd_pcm_hw_params_t) callconv(.C) c_int,
+    snd_pcm_hw_params_can_pause: *const fn (?*const c.snd_pcm_hw_params_t) callconv(.C) c_int,
+    snd_pcm_hw_params_current: *const fn (?*c.snd_pcm_t, ?*c.snd_pcm_hw_params_t) callconv(.C) c_int,
+    snd_pcm_hw_params_get_format_mask: *const fn (?*c.snd_pcm_hw_params_t, ?*c.snd_pcm_format_mask_t) callconv(.C) void,
+    snd_pcm_hw_params_get_rate_min: *const fn (?*const c.snd_pcm_hw_params_t, [*c]c_uint, [*c]c_int) callconv(.C) c_int,
+    snd_pcm_hw_params_get_rate_max: *const fn (?*const c.snd_pcm_hw_params_t, [*c]c_uint, [*c]c_int) callconv(.C) c_int,
+    snd_pcm_hw_params_get_period_size: *const fn (?*const c.snd_pcm_hw_params_t, [*c]c.snd_pcm_uframes_t, [*c]c_int) callconv(.C) c_int,
+    snd_pcm_query_chmaps: *const fn (?*c.snd_pcm_t) callconv(.C) [*c][*c]c.snd_pcm_chmap_query_t,
+    snd_pcm_free_chmaps: *const fn ([*c][*c]c.snd_pcm_chmap_query_t) callconv(.C) void,
+    snd_pcm_format_mask_malloc: *const fn ([*c]?*c.snd_pcm_format_mask_t) callconv(.C) c_int,
+    snd_pcm_format_mask_free: *const fn (?*c.snd_pcm_format_mask_t) callconv(.C) void,
+    snd_pcm_format_mask_none: *const fn (?*c.snd_pcm_format_mask_t) callconv(.C) void,
+    snd_pcm_format_mask_set: *const fn (?*c.snd_pcm_format_mask_t, c.snd_pcm_format_t) callconv(.C) void,
+    snd_pcm_format_mask_test: *const fn (?*const c.snd_pcm_format_mask_t, c.snd_pcm_format_t) callconv(.C) c_int,
+    snd_card_next: *const fn ([*c]c_int) callconv(.C) c_int,
+    snd_ctl_open: *const fn ([*c]?*c.snd_ctl_t, [*c]const u8, c_int) callconv(.C) c_int,
+    snd_ctl_close: *const fn (?*c.snd_ctl_t) callconv(.C) c_int,
+    snd_ctl_pcm_next_device: *const fn (?*c.snd_ctl_t, [*c]c_int) callconv(.C) c_int,
+    snd_ctl_pcm_info: *const fn (?*c.snd_ctl_t, ?*c.snd_pcm_info_t) callconv(.C) c_int,
+    snd_mixer_open: *const fn ([*c]?*c.snd_mixer_t, c_int) callconv(.C) c_int,
+    snd_mixer_close: *const fn (?*c.snd_mixer_t) callconv(.C) c_int,
+    snd_mixer_load: *const fn (?*c.snd_mixer_t) callconv(.C) c_int,
+    snd_mixer_attach: *const fn (?*c.snd_mixer_t, [*c]const u8) callconv(.C) c_int,
+    snd_mixer_find_selem: *const fn (?*c.snd_mixer_t, ?*const c.snd_mixer_selem_id_t) callconv(.C) ?*c.snd_mixer_elem_t,
+    snd_mixer_selem_register: *const fn (?*c.snd_mixer_t, [*c]c.struct_snd_mixer_selem_regopt, [*c]?*c.snd_mixer_class_t) callconv(.C) c_int,
+    snd_mixer_selem_id_malloc: *const fn ([*c]?*c.snd_mixer_selem_id_t) callconv(.C) c_int,
+    snd_mixer_selem_id_free: *const fn (?*c.snd_mixer_selem_id_t) callconv(.C) void,
+    snd_mixer_selem_id_set_index: *const fn (?*c.snd_mixer_selem_id_t, c_uint) callconv(.C) void,
+    snd_mixer_selem_id_set_name: *const fn (?*c.snd_mixer_selem_id_t, [*c]const u8) callconv(.C) void,
+    snd_mixer_selem_set_playback_volume_all: *const fn (?*c.snd_mixer_elem_t, c_long) callconv(.C) c_int,
+    snd_mixer_selem_get_playback_volume: *const fn (?*c.snd_mixer_elem_t, c.snd_mixer_selem_channel_id_t, [*c]c_long) callconv(.C) c_int,
+    snd_mixer_selem_get_playback_volume_range: *const fn (?*c.snd_mixer_elem_t, [*c]c_long, [*c]c_long) callconv(.C) c_int,
+    snd_mixer_selem_has_playback_channel: *const fn (?*c.snd_mixer_elem_t, c.snd_mixer_selem_channel_id_t) callconv(.C) c_int,
+    snd_mixer_selem_set_capture_volume_all: *const fn (?*c.snd_mixer_elem_t, c_long) callconv(.C) c_int,
+    snd_mixer_selem_get_capture_volume: *const fn (?*c.snd_mixer_elem_t, c.snd_mixer_selem_channel_id_t, [*c]c_long) callconv(.C) c_int,
+    snd_mixer_selem_get_capture_volume_range: *const fn (?*c.snd_mixer_elem_t, [*c]c_long, [*c]c_long) callconv(.C) c_int,
+    snd_mixer_selem_has_capture_channel: *const fn (?*c.snd_mixer_elem_t, c.snd_mixer_selem_channel_id_t) callconv(.C) c_int,
 
     pub fn load() !void {
-        handle = std.DynLib.openZ("libasound.so") catch return error.LibraryNotFound;
-
-        snd_lib_error_set_handler = handle.lookup(@TypeOf(snd_lib_error_set_handler), "snd_lib_error_set_handler") orelse return error.SymbolLookup;
-        snd_pcm_info_malloc = handle.lookup(@TypeOf(snd_pcm_info_malloc), "snd_pcm_info_malloc") orelse return error.SymbolLookup;
-        snd_pcm_info_free = handle.lookup(@TypeOf(snd_pcm_info_free), "snd_pcm_info_free") orelse return error.SymbolLookup;
-        snd_pcm_open = handle.lookup(@TypeOf(snd_pcm_open), "snd_pcm_open") orelse return error.SymbolLookup;
-        snd_pcm_close = handle.lookup(@TypeOf(snd_pcm_close), "snd_pcm_close") orelse return error.SymbolLookup;
-        snd_pcm_state = handle.lookup(@TypeOf(snd_pcm_state), "snd_pcm_state") orelse return error.SymbolLookup;
-        snd_pcm_pause = handle.lookup(@TypeOf(snd_pcm_pause), "snd_pcm_pause") orelse return error.SymbolLookup;
-        snd_pcm_writei = handle.lookup(@TypeOf(snd_pcm_writei), "snd_pcm_writei") orelse return error.SymbolLookup;
-        snd_pcm_prepare = handle.lookup(@TypeOf(snd_pcm_prepare), "snd_pcm_prepare") orelse return error.SymbolLookup;
-        snd_pcm_info_set_device = handle.lookup(@TypeOf(snd_pcm_info_set_device), "snd_pcm_info_set_device") orelse return error.SymbolLookup;
-        snd_pcm_info_set_subdevice = handle.lookup(@TypeOf(snd_pcm_info_set_subdevice), "snd_pcm_info_set_subdevice") orelse return error.SymbolLookup;
-        snd_pcm_info_get_name = handle.lookup(@TypeOf(snd_pcm_info_get_name), "snd_pcm_info_get_name") orelse return error.SymbolLookup;
-        snd_pcm_info_set_stream = handle.lookup(@TypeOf(snd_pcm_info_set_stream), "snd_pcm_info_set_stream") orelse return error.SymbolLookup;
-        snd_pcm_hw_free = handle.lookup(@TypeOf(snd_pcm_hw_free), "snd_pcm_hw_free") orelse return error.SymbolLookup;
-        snd_pcm_hw_params_malloc = handle.lookup(@TypeOf(snd_pcm_hw_params_malloc), "snd_pcm_hw_params_malloc") orelse return error.SymbolLookup;
-        snd_pcm_hw_params_free = handle.lookup(@TypeOf(snd_pcm_hw_params_free), "snd_pcm_hw_params_free") orelse return error.SymbolLookup;
-        snd_pcm_set_params = handle.lookup(@TypeOf(snd_pcm_set_params), "snd_pcm_set_params") orelse return error.SymbolLookup;
-        snd_pcm_hw_params_any = handle.lookup(@TypeOf(snd_pcm_hw_params_any), "snd_pcm_hw_params_any") orelse return error.SymbolLookup;
-        snd_pcm_hw_params_can_pause = handle.lookup(@TypeOf(snd_pcm_hw_params_can_pause), "snd_pcm_hw_params_can_pause") orelse return error.SymbolLookup;
-        snd_pcm_hw_params_current = handle.lookup(@TypeOf(snd_pcm_hw_params_current), "snd_pcm_hw_params_current") orelse return error.SymbolLookup;
-        snd_pcm_hw_params_get_format_mask = handle.lookup(@TypeOf(snd_pcm_hw_params_get_format_mask), "snd_pcm_hw_params_get_format_mask") orelse return error.SymbolLookup;
-        snd_pcm_hw_params_get_rate_min = handle.lookup(@TypeOf(snd_pcm_hw_params_get_rate_min), "snd_pcm_hw_params_get_rate_min") orelse return error.SymbolLookup;
-        snd_pcm_hw_params_get_rate_max = handle.lookup(@TypeOf(snd_pcm_hw_params_get_rate_max), "snd_pcm_hw_params_get_rate_max") orelse return error.SymbolLookup;
-        snd_pcm_hw_params_get_period_size = handle.lookup(@TypeOf(snd_pcm_hw_params_get_period_size), "snd_pcm_hw_params_get_period_size") orelse return error.SymbolLookup;
-        snd_pcm_query_chmaps = handle.lookup(@TypeOf(snd_pcm_query_chmaps), "snd_pcm_query_chmaps") orelse return error.SymbolLookup;
-        snd_pcm_free_chmaps = handle.lookup(@TypeOf(snd_pcm_free_chmaps), "snd_pcm_free_chmaps") orelse return error.SymbolLookup;
-        snd_pcm_format_mask_malloc = handle.lookup(@TypeOf(snd_pcm_format_mask_malloc), "snd_pcm_format_mask_malloc") orelse return error.SymbolLookup;
-        snd_pcm_format_mask_free = handle.lookup(@TypeOf(snd_pcm_format_mask_free), "snd_pcm_format_mask_free") orelse return error.SymbolLookup;
-        snd_pcm_format_mask_none = handle.lookup(@TypeOf(snd_pcm_format_mask_none), "snd_pcm_format_mask_none") orelse return error.SymbolLookup;
-        snd_pcm_format_mask_set = handle.lookup(@TypeOf(snd_pcm_format_mask_set), "snd_pcm_format_mask_set") orelse return error.SymbolLookup;
-        snd_pcm_format_mask_test = handle.lookup(@TypeOf(snd_pcm_format_mask_test), "snd_pcm_format_mask_test") orelse return error.SymbolLookup;
-        snd_card_next = handle.lookup(@TypeOf(snd_card_next), "snd_card_next") orelse return error.SymbolLookup;
-        snd_ctl_open = handle.lookup(@TypeOf(snd_ctl_open), "snd_ctl_open") orelse return error.SymbolLookup;
-        snd_ctl_close = handle.lookup(@TypeOf(snd_ctl_close), "snd_ctl_close") orelse return error.SymbolLookup;
-        snd_ctl_pcm_next_device = handle.lookup(@TypeOf(snd_ctl_pcm_next_device), "snd_ctl_pcm_next_device") orelse return error.SymbolLookup;
-        snd_ctl_pcm_info = handle.lookup(@TypeOf(snd_ctl_pcm_info), "snd_ctl_pcm_info") orelse return error.SymbolLookup;
-        snd_mixer_open = handle.lookup(@TypeOf(snd_mixer_open), "snd_mixer_open") orelse return error.SymbolLookup;
-        snd_mixer_close = handle.lookup(@TypeOf(snd_mixer_close), "snd_mixer_close") orelse return error.SymbolLookup;
-        snd_mixer_load = handle.lookup(@TypeOf(snd_mixer_load), "snd_mixer_load") orelse return error.SymbolLookup;
-        snd_mixer_attach = handle.lookup(@TypeOf(snd_mixer_attach), "snd_mixer_attach") orelse return error.SymbolLookup;
-        snd_mixer_find_selem = handle.lookup(@TypeOf(snd_mixer_find_selem), "snd_mixer_find_selem") orelse return error.SymbolLookup;
-        snd_mixer_selem_register = handle.lookup(@TypeOf(snd_mixer_selem_register), "snd_mixer_selem_register") orelse return error.SymbolLookup;
-        snd_mixer_selem_id_malloc = handle.lookup(@TypeOf(snd_mixer_selem_id_malloc), "snd_mixer_selem_id_malloc") orelse return error.SymbolLookup;
-        snd_mixer_selem_id_free = handle.lookup(@TypeOf(snd_mixer_selem_id_free), "snd_mixer_selem_id_free") orelse return error.SymbolLookup;
-        snd_mixer_selem_id_set_index = handle.lookup(@TypeOf(snd_mixer_selem_id_set_index), "snd_mixer_selem_id_set_index") orelse return error.SymbolLookup;
-        snd_mixer_selem_id_set_name = handle.lookup(@TypeOf(snd_mixer_selem_id_set_name), "snd_mixer_selem_id_set_name") orelse return error.SymbolLookup;
-        snd_mixer_selem_set_playback_volume_all = handle.lookup(@TypeOf(snd_mixer_selem_set_playback_volume_all), "snd_mixer_selem_set_playback_volume_all") orelse return error.SymbolLookup;
-        snd_mixer_selem_get_playback_volume = handle.lookup(@TypeOf(snd_mixer_selem_get_playback_volume), "snd_mixer_selem_get_playback_volume") orelse return error.SymbolLookup;
-        snd_mixer_selem_get_playback_volume_range = handle.lookup(@TypeOf(snd_mixer_selem_get_playback_volume_range), "snd_mixer_selem_get_playback_volume_range") orelse return error.SymbolLookup;
-        snd_mixer_selem_has_playback_channel = handle.lookup(@TypeOf(snd_mixer_selem_has_playback_channel), "snd_mixer_selem_has_playback_channel") orelse return error.SymbolLookup;
+        lib.handle = std.DynLib.openZ("libasound.so") catch return error.LibraryNotFound;
+        inline for (@typeInfo(Lib).Struct.fields[1..]) |field| {
+            const name = std.fmt.comptimePrint("{s}\x00", .{field.name});
+            const name_z: [:0]const u8 = @ptrCast(name[0 .. name.len - 1]);
+            @field(lib, field.name) = lib.handle.lookup(field.type, name_z) orelse return error.SymbolLookup;
+        }
     }
 };
 
@@ -132,7 +92,7 @@ pub const Context = struct {
     };
 
     pub fn init(allocator: std.mem.Allocator, options: main.Context.Options) !backends.BackendContext {
-        try lib.load();
+        try Lib.load();
 
         _ = lib.snd_lib_error_set_handler(@as(c.snd_lib_error_handler_t, @ptrCast(&util.doNothing)));
 
@@ -294,7 +254,7 @@ pub const Context = struct {
     pub fn refresh(self: *Context) !void {
         for (self.devices_info.list.items) |d|
             freeDevice(self.allocator, d);
-        self.devices_info.clear(self.allocator);
+        self.devices_info.clear();
 
         var pcm_info: ?*c.snd_pcm_info_t = null;
         _ = lib.snd_pcm_info_malloc(&pcm_info);
@@ -445,23 +405,25 @@ pub const Context = struct {
         return self.devices_info.default(mode);
     }
 
-    pub fn createPlayer(self: Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.BackendPlayer {
-        const format = device.preferredFormat(options.format);
-        const sample_rate = device.sample_rate.clamp(options.sample_rate);
-        var pcm: ?*c.snd_pcm_t = null;
-        var mixer: ?*c.snd_mixer_t = null;
-        var selem: ?*c.snd_mixer_selem_id_t = null;
-        var mixer_elm: ?*c.snd_mixer_elem_t = null;
-        var period_size: c_ulong = 0;
-
-        if (lib.snd_pcm_open(&pcm, device.id.ptr, modeToStream(device.mode), 0) < 0)
+    pub fn createStream(
+        self: Context,
+        device: main.Device,
+        format: main.Format,
+        sample_rate: u24,
+        pcm: *?*c.snd_pcm_t,
+        mixer: *?*c.snd_mixer_t,
+        selem: *?*c.snd_mixer_selem_id_t,
+        mixer_elm: *?*c.snd_mixer_elem_t,
+        period_size: *c_ulong,
+    ) !void {
+        if (lib.snd_pcm_open(pcm, device.id.ptr, modeToStream(device.mode), 0) < 0)
             return error.OpeningDevice;
-        errdefer _ = lib.snd_pcm_close(pcm);
+        errdefer _ = lib.snd_pcm_close(pcm.*);
         {
             var hw_params: ?*c.snd_pcm_hw_params_t = null;
 
             if ((lib.snd_pcm_set_params(
-                pcm,
+                pcm.*,
                 toAlsaFormat(format),
                 c.SND_PCM_ACCESS_RW_INTERLEAVED,
                 @as(c_uint, @intCast(device.channels.len)),
@@ -470,45 +432,56 @@ pub const Context = struct {
                 main.default_latency,
             )) < 0)
                 return error.OpeningDevice;
-            errdefer _ = lib.snd_pcm_hw_free(pcm);
+            errdefer _ = lib.snd_pcm_hw_free(pcm.*);
 
             if (lib.snd_pcm_hw_params_malloc(&hw_params) < 0)
                 return error.OpeningDevice;
             defer lib.snd_pcm_hw_params_free(hw_params);
 
-            if (lib.snd_pcm_hw_params_current(pcm, hw_params) < 0)
+            if (lib.snd_pcm_hw_params_current(pcm.*, hw_params) < 0)
                 return error.OpeningDevice;
 
-            if (lib.snd_pcm_hw_params_get_period_size(hw_params, &period_size, null) < 0)
+            if (lib.snd_pcm_hw_params_get_period_size(hw_params, period_size, null) < 0)
                 return error.OpeningDevice;
         }
 
         {
-            if (lib.snd_mixer_open(&mixer, 0) < 0)
+            if (lib.snd_mixer_open(mixer, 0) < 0)
                 return error.OutOfMemory;
 
             const card_id = try self.allocator.dupeZ(u8, std.mem.sliceTo(device.id, ','));
             defer self.allocator.free(card_id);
 
-            if (lib.snd_mixer_attach(mixer, card_id.ptr) < 0)
+            if (lib.snd_mixer_attach(mixer.*, card_id.ptr) < 0)
                 return error.IncompatibleDevice;
 
-            if (lib.snd_mixer_selem_register(mixer, null, null) < 0)
+            if (lib.snd_mixer_selem_register(mixer.*, null, null) < 0)
                 return error.OpeningDevice;
 
-            if (lib.snd_mixer_load(mixer) < 0)
+            if (lib.snd_mixer_load(mixer.*) < 0)
                 return error.OpeningDevice;
 
-            if (lib.snd_mixer_selem_id_malloc(&selem) < 0)
+            if (lib.snd_mixer_selem_id_malloc(selem) < 0)
                 return error.OutOfMemory;
-            errdefer lib.snd_mixer_selem_id_free(selem);
+            errdefer lib.snd_mixer_selem_id_free(selem.*);
 
-            lib.snd_mixer_selem_id_set_index(selem, 0);
-            lib.snd_mixer_selem_id_set_name(selem, "Master");
+            lib.snd_mixer_selem_id_set_index(selem.*, 0);
+            lib.snd_mixer_selem_id_set_name(selem.*, "Master");
 
-            mixer_elm = lib.snd_mixer_find_selem(mixer, selem) orelse
+            mixer_elm.* = lib.snd_mixer_find_selem(mixer.*, selem.*) orelse
                 return error.IncompatibleDevice;
         }
+    }
+
+    pub fn createPlayer(self: Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.BackendPlayer {
+        const format = device.preferredFormat(options.format);
+        const sample_rate = device.sample_rate.clamp(options.sample_rate);
+        var pcm: ?*c.snd_pcm_t = null;
+        var mixer: ?*c.snd_mixer_t = null;
+        var selem: ?*c.snd_mixer_selem_id_t = null;
+        var mixer_elm: ?*c.snd_mixer_elem_t = null;
+        var period_size: c_ulong = 0;
+        try self.createStream(device, format, sample_rate, &pcm, &mixer, &selem, &mixer_elm, &period_size);
 
         var player = try self.allocator.create(Player);
         player.* = .{
@@ -530,6 +503,38 @@ pub const Context = struct {
             .write_step = format.frameSize(device.channels.len),
         };
         return .{ .alsa = player };
+    }
+
+    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.BackendRecorder {
+        const format = device.preferredFormat(options.format);
+        const sample_rate = device.sample_rate.clamp(options.sample_rate);
+        var pcm: ?*c.snd_pcm_t = null;
+        var mixer: ?*c.snd_mixer_t = null;
+        var selem: ?*c.snd_mixer_selem_id_t = null;
+        var mixer_elm: ?*c.snd_mixer_elem_t = null;
+        var period_size: c_ulong = 0;
+        try self.createStream(device, format, sample_rate, &pcm, &mixer, &selem, &mixer_elm, &period_size);
+
+        var recorder = try self.allocator.create(Recorder);
+        recorder.* = .{
+            .allocator = self.allocator,
+            .thread = undefined,
+            .mutex = .{},
+            .aborted = .{ .value = false },
+            .sample_buffer = try self.allocator.alloc(u8, period_size * format.frameSize(device.channels.len)),
+            .period_size = period_size,
+            .pcm = pcm.?,
+            .mixer = mixer.?,
+            .selem = selem.?,
+            .mixer_elm = mixer_elm.?,
+            .readFn = readFn,
+            .user_data = options.user_data,
+            .channels = device.channels,
+            .format = format,
+            .sample_rate = sample_rate,
+            .read_step = format.frameSize(device.channels.len),
+        };
+        return .{ .alsa = recorder };
     }
 };
 
@@ -566,7 +571,7 @@ pub const Player = struct {
     }
 
     pub fn start(self: *Player) !void {
-        self.thread = std.Thread.spawn(.{}, writeLoop, .{self}) catch |err| switch (err) {
+        self.thread = std.Thread.spawn(.{}, writeThread, .{self}) catch |err| switch (err) {
             error.ThreadQuotaExceeded,
             error.SystemResources,
             error.LockedMemoryLimitExceeded,
@@ -576,7 +581,7 @@ pub const Player = struct {
         };
     }
 
-    fn writeLoop(self: *Player) void {
+    fn writeThread(self: *Player) void {
         for (self.channels, 0..) |*ch, i| {
             ch.*.ptr = self.sample_buffer.ptr + self.format.frameSize(i);
         }
@@ -650,6 +655,129 @@ pub const Player = struct {
         var min_vol: c_long = 0;
         var max_vol: c_long = 0;
         if (lib.snd_mixer_selem_get_playback_volume_range(self.mixer_elm, &min_vol, &max_vol) < 0)
+            return error.CannotGetVolume;
+
+        return @as(f32, @floatFromInt(vol)) / @as(f32, @floatFromInt(max_vol - min_vol));
+    }
+};
+
+pub const Recorder = struct {
+    allocator: std.mem.Allocator,
+    thread: std.Thread,
+    mutex: std.Thread.Mutex,
+    aborted: std.atomic.Atomic(bool),
+    sample_buffer: []u8,
+    period_size: c_ulong,
+    pcm: *c.snd_pcm_t,
+    mixer: *c.snd_mixer_t,
+    selem: *c.snd_mixer_selem_id_t,
+    mixer_elm: *c.snd_mixer_elem_t,
+    readFn: main.ReadFn,
+    user_data: ?*anyopaque,
+
+    channels: []main.Channel,
+    format: main.Format,
+    sample_rate: u24,
+    read_step: u8,
+
+    pub fn deinit(self: *Recorder) void {
+        self.aborted.store(true, .Unordered);
+        self.thread.join();
+
+        _ = lib.snd_mixer_close(self.mixer);
+        lib.snd_mixer_selem_id_free(self.selem);
+        _ = lib.snd_pcm_close(self.pcm);
+        _ = lib.snd_pcm_hw_free(self.pcm);
+
+        self.allocator.free(self.sample_buffer);
+        self.allocator.destroy(self);
+    }
+
+    pub fn start(self: *Recorder) !void {
+        self.thread = std.Thread.spawn(.{}, readThread, .{self}) catch |err| switch (err) {
+            error.ThreadQuotaExceeded,
+            error.SystemResources,
+            error.LockedMemoryLimitExceeded,
+            => return error.SystemResources,
+            error.OutOfMemory => return error.OutOfMemory,
+            error.Unexpected => unreachable,
+        };
+    }
+
+    fn readThread(self: *Recorder) void {
+        for (self.channels, 0..) |*ch, i| {
+            ch.*.ptr = self.sample_buffer.ptr + self.format.frameSize(i);
+        }
+
+        var underrun = false;
+        while (!self.aborted.load(.Unordered)) {
+            if (!underrun) {
+                self.readFn(self.user_data, self.period_size);
+            }
+            underrun = false;
+            const n = lib.snd_pcm_readi(self.pcm, self.sample_buffer.ptr, self.period_size);
+            if (n < 0) {
+                _ = lib.snd_pcm_prepare(self.pcm);
+                underrun = true;
+            }
+        }
+    }
+
+    pub fn record(self: Recorder) !void {
+        if (lib.snd_pcm_state(self.pcm) == c.SND_PCM_STATE_PAUSED) {
+            if (lib.snd_pcm_pause(self.pcm, 0) < 0)
+                return error.CannotRecord;
+        }
+    }
+
+    pub fn pause(self: Recorder) !void {
+        if (lib.snd_pcm_state(self.pcm) != c.SND_PCM_STATE_PAUSED) {
+            if (lib.snd_pcm_pause(self.pcm, 1) < 0)
+                return error.CannotPause;
+        }
+    }
+
+    pub fn paused(self: Recorder) bool {
+        return lib.snd_pcm_state(self.pcm) == c.SND_PCM_STATE_PAUSED;
+    }
+
+    pub fn setVolume(self: *Recorder, vol: f32) !void {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+
+        var min_vol: c_long = 0;
+        var max_vol: c_long = 0;
+        if (lib.snd_mixer_selem_get_capture_volume_range(self.mixer_elm, &min_vol, &max_vol) < 0)
+            return error.CannotSetVolume;
+
+        const dist = @as(f32, @floatFromInt(max_vol - min_vol));
+        if (lib.snd_mixer_selem_set_capture_volume_all(
+            self.mixer_elm,
+            @as(c_long, @intFromFloat(dist * vol)) + min_vol,
+        ) < 0)
+            return error.CannotSetVolume;
+    }
+
+    pub fn volume(self: *Recorder) !f32 {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+
+        var vol: c_long = 0;
+        var channel: c_int = 0;
+
+        while (channel < c.SND_MIXER_SCHN_LAST) : (channel += 1) {
+            if (lib.snd_mixer_selem_has_capture_channel(self.mixer_elm, channel) == 1) {
+                if (lib.snd_mixer_selem_get_capture_volume(self.mixer_elm, channel, &vol) == 0)
+                    break;
+            }
+        }
+
+        if (channel == c.SND_MIXER_SCHN_LAST)
+            return error.CannotGetVolume;
+
+        var min_vol: c_long = 0;
+        var max_vol: c_long = 0;
+        if (lib.snd_mixer_selem_get_capture_volume_range(self.mixer_elm, &min_vol, &max_vol) < 0)
             return error.CannotGetVolume;
 
         return @as(f32, @floatFromInt(vol)) / @as(f32, @floatFromInt(max_vol - min_vol));
