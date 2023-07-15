@@ -42,7 +42,7 @@ pub const Context = struct {
     pub fn refresh(self: *Context) !void {
         for (self.devices_info.list.items) |d|
             freeDevice(self.allocator, d);
-        self.devices_info.clear(self.allocator);
+        self.devices_info.clear();
 
         var prop_address = c.AudioObjectPropertyAddress{
             .mSelector = c.kAudioHardwarePropertyDevices,
@@ -99,12 +99,10 @@ pub const Context = struct {
         }
 
         for (devs) |id| {
-            var buf_list: *c.AudioBufferList = undefined;
+            var buf_list = try self.allocator.create(c.AudioBufferList);
             defer self.allocator.destroy(buf_list);
-            var mode: main.Device.Mode = undefined;
-            for (std.meta.tags(main.Device.Mode)) |m| {
-                mode = m;
 
+            for (std.meta.tags(main.Device.Mode)) |mode| {
                 io_size = 0;
                 prop_address.mSelector = c.kAudioDevicePropertyStreamConfiguration;
                 prop_address.mScope = switch (mode) {
@@ -121,7 +119,6 @@ pub const Context = struct {
                     continue;
                 }
 
-                buf_list = try self.allocator.create(c.AudioBufferList);
                 if (c.AudioObjectGetPropertyData(
                     id,
                     &prop_address,
@@ -133,95 +130,109 @@ pub const Context = struct {
                     return error.OpeningDevice;
                 }
 
-                if (buf_list.mBuffers[0].mNumberChannels > 0) {
-                    break;
+                if (buf_list.mBuffers[0].mNumberChannels == 0) break;
+
+                // for now, only set `channels` to the output channels
+                const audio_buffer_list_property_address = c.AudioObjectPropertyAddress{
+                    .mSelector = c.kAudioDevicePropertyStreamConfiguration,
+                    .mScope = switch (mode) {
+                        .playback => c.kAudioDevicePropertyScopeOutput,
+                        .capture => c.kAudioDevicePropertyScopeInput,
+                    },
+                    .mElement = c.kAudioObjectPropertyElementMain,
+                };
+                var output_audio_buffer_list: c.AudioBufferList = undefined;
+                var audio_buffer_list_size: c_uint = undefined;
+
+                if (c.AudioObjectGetPropertyDataSize(
+                    id,
+                    &audio_buffer_list_property_address,
+                    0,
+                    null,
+                    &audio_buffer_list_size,
+                ) != c.noErr) {
+                    return error.OpeningDevice;
                 }
-            }
 
-            // for now, only set `channels` to the output channels
-            const audio_buffer_list_property_address = c.AudioObjectPropertyAddress{
-                .mSelector = c.kAudioDevicePropertyStreamConfiguration,
-                .mScope = c.kAudioDevicePropertyScopeOutput,
-                .mElement = c.kAudioObjectPropertyElementMain,
-            };
-            var output_audio_buffer_list: c.AudioBufferList = undefined;
-            var audio_buffer_list_size: c_uint = undefined;
+                if (c.AudioObjectGetPropertyData(
+                    id,
+                    &prop_address,
+                    0,
+                    null,
+                    &audio_buffer_list_size,
+                    &output_audio_buffer_list,
+                ) != c.noErr) {
+                    return error.OpeningDevice;
+                }
 
-            if (c.AudioObjectGetPropertyDataSize(id, &audio_buffer_list_property_address, 0, null, &audio_buffer_list_size) != c.noErr) {
-                return error.OpeningDevice;
-            }
+                var output_channel_count: usize = 0;
+                for (0..output_audio_buffer_list.mNumberBuffers) |mBufferIndex| {
+                    output_channel_count += output_audio_buffer_list.mBuffers[mBufferIndex].mNumberChannels;
+                }
 
-            if (c.AudioObjectGetPropertyData(id, &prop_address, 0, null, &audio_buffer_list_size, &output_audio_buffer_list) != c.noErr) {
-                return error.OpeningDevice;
-            }
+                var channels = try self.allocator.alloc(main.Channel, output_channel_count);
 
-            var output_channel_count: usize = 0;
-            for (0..output_audio_buffer_list.mNumberBuffers) |mBufferIndex| {
-                output_channel_count += output_audio_buffer_list.mBuffers[mBufferIndex].mNumberChannels;
-            }
+                prop_address.mSelector = c.kAudioDevicePropertyNominalSampleRate;
+                io_size = @sizeOf(f64);
+                var sample_rate: f64 = undefined;
+                if (c.AudioObjectGetPropertyData(
+                    id,
+                    &prop_address,
+                    0,
+                    null,
+                    &io_size,
+                    &sample_rate,
+                ) != c.noErr) {
+                    return error.OpeningDevice;
+                }
 
-            var channels = try self.allocator.alloc(main.Channel, output_channel_count);
+                io_size = @sizeOf([*]const u8);
+                if (c.AudioDeviceGetPropertyInfo(
+                    id,
+                    0,
+                    0,
+                    c.kAudioDevicePropertyDeviceName,
+                    &io_size,
+                    null,
+                ) != c.noErr) {
+                    return error.OpeningDevice;
+                }
 
-            prop_address.mSelector = c.kAudioDevicePropertyNominalSampleRate;
-            io_size = @sizeOf(f64);
-            var sample_rate: f64 = undefined;
-            if (c.AudioObjectGetPropertyData(
-                id,
-                &prop_address,
-                0,
-                null,
-                &io_size,
-                &sample_rate,
-            ) != c.noErr) {
-                return error.OpeningDevice;
-            }
+                const name = try self.allocator.allocSentinel(u8, io_size, 0);
+                errdefer self.allocator.free(name);
+                if (c.AudioDeviceGetProperty(
+                    id,
+                    0,
+                    0,
+                    c.kAudioDevicePropertyDeviceName,
+                    &io_size,
+                    name.ptr,
+                ) != c.noErr) {
+                    return error.OpeningDevice;
+                }
+                const id_str = try std.fmt.allocPrintZ(self.allocator, "{d}", .{id});
+                errdefer self.allocator.free(id_str);
 
-            io_size = @sizeOf([*]const u8);
-            if (c.AudioDeviceGetPropertyInfo(
-                id,
-                0,
-                0,
-                c.kAudioDevicePropertyDeviceName,
-                &io_size,
-                null,
-            ) != c.noErr) {
-                return error.OpeningDevice;
-            }
+                var dev = main.Device{
+                    .id = id_str,
+                    .name = name,
+                    .mode = mode,
+                    .channels = channels,
+                    .formats = &.{ .i16, .i32, .f32 },
+                    .sample_rate = .{
+                        .min = @as(u24, @intFromFloat(@floor(sample_rate))),
+                        .max = @as(u24, @intFromFloat(@floor(sample_rate))),
+                    },
+                };
 
-            const name = try self.allocator.allocSentinel(u8, io_size, 0);
-            errdefer self.allocator.free(name);
-            if (c.AudioDeviceGetProperty(
-                id,
-                0,
-                0,
-                c.kAudioDevicePropertyDeviceName,
-                &io_size,
-                name.ptr,
-            ) != c.noErr) {
-                return error.OpeningDevice;
-            }
-            const id_str = try std.fmt.allocPrintZ(self.allocator, "{d}", .{id});
-            errdefer self.allocator.free(id_str);
+                try self.devices_info.list.append(self.allocator, dev);
+                if (id == default_output_id and mode == .playback) {
+                    self.devices_info.default_output = self.devices_info.list.items.len - 1;
+                }
 
-            var dev = main.Device{
-                .id = id_str,
-                .name = name,
-                .mode = mode,
-                .channels = channels,
-                .formats = &.{ .i16, .i32, .f32 },
-                .sample_rate = .{
-                    .min = @as(u24, @intFromFloat(@floor(sample_rate))),
-                    .max = @as(u24, @intFromFloat(@floor(sample_rate))),
-                },
-            };
-
-            try self.devices_info.list.append(self.allocator, dev);
-            if (id == default_output_id) {
-                self.devices_info.default_output = self.devices_info.list.items.len - 1;
-            }
-
-            if (id == default_input_id) {
-                self.devices_info.default_input = self.devices_info.list.items.len - 1;
+                if (id == default_input_id and mode == .capture) {
+                    self.devices_info.default_input = self.devices_info.list.items.len - 1;
+                }
             }
         }
     }
@@ -236,6 +247,7 @@ pub const Context = struct {
 
     pub fn createPlayer(self: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.BackendPlayer {
         var player = try self.allocator.create(Player);
+        errdefer self.allocator.destroy(player);
 
         var component_desc = c.AudioComponentDescription{
             .componentType = c.kAudioUnitType_Output,
@@ -306,6 +318,104 @@ pub const Context = struct {
         };
         return .{ .coreaudio = player };
     }
+
+    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.BackendRecorder {
+        var recorder = try self.allocator.create(Recorder);
+        errdefer self.allocator.destroy(recorder);
+
+        var component_desc = c.AudioComponentDescription{
+            .componentType = c.kAudioUnitType_Output,
+            .componentSubType = c.kAudioUnitSubType_HALOutput,
+            .componentManufacturer = c.kAudioUnitManufacturer_Apple,
+            .componentFlags = 0,
+            .componentFlagsMask = 0,
+        };
+        const component = c.AudioComponentFindNext(null, &component_desc);
+        if (component == null) return error.OpeningDevice;
+
+        var audio_unit: c.AudioComponentInstance = undefined;
+        if (c.AudioComponentInstanceNew(component, &audio_unit) != c.noErr) return error.OpeningDevice;
+
+        if (c.AudioUnitInitialize(audio_unit) != c.noErr) return error.OpeningDevice;
+        errdefer _ = c.AudioUnitUninitialize(audio_unit);
+
+        var enable_io: u32 = 1;
+        if (c.AudioUnitSetProperty(
+            audio_unit,
+            c.kAudioOutputUnitProperty_EnableIO,
+            c.kAudioUnitScope_Input,
+            1,
+            &enable_io,
+            @sizeOf(u32),
+        ) != c.noErr) {
+            return error.OpeningDevice;
+        }
+
+        enable_io = 0;
+        if (c.AudioUnitSetProperty(
+            audio_unit,
+            c.kAudioOutputUnitProperty_EnableIO,
+            c.kAudioUnitScope_Output,
+            0,
+            &enable_io,
+            @sizeOf(u32),
+        ) != c.noErr) {
+            return error.OpeningDevice;
+        }
+
+        const device_id = std.fmt.parseInt(c.AudioDeviceID, device.id, 10) catch unreachable;
+        if (c.AudioUnitSetProperty(
+            audio_unit,
+            c.kAudioOutputUnitProperty_CurrentDevice,
+            c.kAudioUnitScope_Input,
+            0,
+            &device_id,
+            @sizeOf(c.AudioDeviceID),
+        ) != c.noErr) {
+            return error.OpeningDevice;
+        }
+
+        const stream_desc = try createStreamDesc(options.format, options.sample_rate, device.channels.len);
+        if (c.AudioUnitSetProperty(
+            audio_unit,
+            c.kAudioUnitProperty_StreamFormat,
+            c.kAudioUnitScope_Input,
+            0,
+            &stream_desc,
+            @sizeOf(c.AudioStreamBasicDescription),
+        ) != c.noErr) {
+            return error.OpeningDevice;
+        }
+
+        const render_callback = c.AURenderCallbackStruct{
+            .inputProc = Recorder.renderCallback,
+            .inputProcRefCon = recorder,
+        };
+        if (c.AudioUnitSetProperty(
+            audio_unit,
+            c.kAudioUnitProperty_SetRenderCallback,
+            c.kAudioUnitScope_Input,
+            0,
+            &render_callback,
+            @sizeOf(c.AURenderCallbackStruct),
+        ) != c.noErr) {
+            return error.OpeningDevice;
+        }
+
+        recorder.* = .{
+            .allocator = self.allocator,
+            .audio_unit = audio_unit.?,
+            .is_paused = false,
+            .vol = 1.0,
+            .readFn = readFn,
+            .user_data = options.user_data,
+            .channels = device.channels,
+            .format = options.format,
+            .sample_rate = options.sample_rate,
+            .read_step = options.format.frameSize(device.channels.len),
+        };
+        return .{ .coreaudio = recorder };
+    }
 };
 
 pub const Player = struct {
@@ -353,7 +463,7 @@ pub const Player = struct {
     }
 
     pub fn start(self: *Player) !void {
-        return self.play();
+        try self.play();
     }
 
     pub fn play(self: *Player) !void {
@@ -389,6 +499,102 @@ pub const Player = struct {
     }
 
     pub fn volume(self: Player) !f32 {
+        var vol: f32 = 0;
+        if (c.AudioUnitGetParameter(
+            self.audio_unit,
+            c.kHALOutputParam_Volume,
+            c.kAudioUnitScope_Global,
+            0,
+            &vol,
+        ) != c.noErr) {
+            if (is_darling) return 1;
+            return error.CannotGetVolume;
+        }
+        return vol;
+    }
+};
+
+pub const Recorder = struct {
+    allocator: std.mem.Allocator,
+    audio_unit: c.AudioUnit,
+    is_paused: bool,
+    vol: f32,
+    readFn: main.ReadFn,
+    user_data: ?*anyopaque,
+
+    channels: []main.Channel,
+    format: main.Format,
+    sample_rate: u24,
+    read_step: u8,
+
+    pub fn renderCallback(
+        self_opaque: ?*anyopaque,
+        action_flags: [*c]c.AudioUnitRenderActionFlags,
+        time_stamp: [*c]const c.AudioTimeStamp,
+        bus_number: u32,
+        frames_left: u32,
+        buf: [*c]c.AudioBufferList,
+    ) callconv(.C) c.OSStatus {
+        _ = action_flags;
+        _ = time_stamp;
+        _ = bus_number;
+        _ = frames_left;
+
+        const self = @as(*Recorder, @ptrCast(@alignCast(self_opaque.?)));
+
+        for (self.channels, 0..) |*ch, i| {
+            ch.ptr = @as([*]u8, @ptrCast(buf.*.mBuffers[0].mData.?)) + self.format.frameSize(i);
+        }
+        const frames = buf.*.mBuffers[0].mDataByteSize / self.format.frameSize(self.channels.len);
+        self.readFn(self.user_data, frames);
+
+        return c.noErr;
+    }
+
+    pub fn deinit(self: *Recorder) void {
+        _ = c.AudioOutputUnitStop(self.audio_unit);
+        _ = c.AudioUnitUninitialize(self.audio_unit);
+        _ = c.AudioComponentInstanceDispose(self.audio_unit);
+        self.allocator.destroy(self);
+    }
+
+    pub fn start(self: *Recorder) !void {
+        try self.record();
+    }
+
+    pub fn record(self: *Recorder) !void {
+        if (c.AudioOutputUnitStart(self.audio_unit) != c.noErr) {
+            return error.CannotRecord;
+        }
+        self.is_paused = false;
+    }
+
+    pub fn pause(self: *Recorder) !void {
+        if (c.AudioOutputUnitStop(self.audio_unit) != c.noErr) {
+            return error.CannotPause;
+        }
+        self.is_paused = true;
+    }
+
+    pub fn paused(self: Recorder) bool {
+        return self.is_paused;
+    }
+
+    pub fn setVolume(self: *Recorder, vol: f32) !void {
+        if (c.AudioUnitSetParameter(
+            self.audio_unit,
+            c.kHALOutputParam_Volume,
+            c.kAudioUnitScope_Global,
+            0,
+            vol,
+            0,
+        ) != c.noErr) {
+            if (is_darling) return;
+            return error.CannotSetVolume;
+        }
+    }
+
+    pub fn volume(self: Recorder) !f32 {
         var vol: f32 = 0;
         if (c.AudioUnitGetParameter(
             self.audio_unit,

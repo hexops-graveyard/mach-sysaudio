@@ -4,20 +4,20 @@ const std = @import("std");
 pub const Backend = std.meta.Tag(BackendContext);
 pub const BackendContext = switch (builtin.os.tag) {
     .linux => union(enum) {
-        alsa: *@import("alsa.zig").Context,
+        pulseaudio: *@import("pulseaudio.zig").Context,
         pipewire: *@import("pipewire.zig").Context,
         jack: *@import("jack.zig").Context,
-        pulseaudio: *@import("pulseaudio.zig").Context,
+        alsa: *@import("alsa.zig").Context,
         dummy: *@import("dummy.zig").Context,
     },
     .freebsd, .netbsd, .openbsd, .solaris => union(enum) {
         pipewire: *@import("pipewire.zig").Context,
-        jack: *@import("jack.zig").Context,
         pulseaudio: *@import("pulseaudio.zig").Context,
+        jack: *@import("jack.zig").Context,
         dummy: *@import("dummy.zig").Context,
     },
     .macos, .ios, .watchos, .tvos => union(enum) {
-        // coreaudio: *@import("coreaudio.zig").Context,
+        coreaudio: *@import("coreaudio.zig").Context,
         dummy: *@import("dummy.zig").Context,
     },
     .windows => union(enum) {
@@ -37,20 +37,20 @@ pub const BackendContext = switch (builtin.os.tag) {
 };
 pub const BackendPlayer = switch (builtin.os.tag) {
     .linux => union(enum) {
-        alsa: *@import("alsa.zig").Player,
+        pulseaudio: *@import("pulseaudio.zig").Player,
         pipewire: *@import("pipewire.zig").Player,
         jack: *@import("jack.zig").Player,
-        pulseaudio: *@import("pulseaudio.zig").Player,
+        alsa: *@import("alsa.zig").Player,
         dummy: *@import("dummy.zig").Player,
     },
     .freebsd, .netbsd, .openbsd, .solaris => union(enum) {
         pipewire: *@import("pipewire.zig").Player,
-        jack: *@import("jack.zig").Player,
         pulseaudio: *@import("pulseaudio.zig").Player,
+        jack: *@import("jack.zig").Player,
         dummy: *@import("dummy.zig").Player,
     },
     .macos, .ios, .watchos, .tvos => union(enum) {
-        // coreaudio: *@import("coreaudio.zig").Player,
+        coreaudio: *@import("coreaudio.zig").Player,
         dummy: *@import("dummy.zig").Player,
     },
     .windows => union(enum) {
@@ -71,20 +71,20 @@ pub const BackendPlayer = switch (builtin.os.tag) {
 
 pub const BackendRecorder = switch (builtin.os.tag) {
     .linux => union(enum) {
-        alsa: *@import("alsa.zig").Recorder,
+        pulseaudio: *@import("pulseaudio.zig").Recorder,
         pipewire: *@import("pipewire.zig").Recorder,
         jack: *@import("jack.zig").Recorder,
-        pulseaudio: *@import("pulseaudio.zig").Recorder,
+        alsa: *@import("alsa.zig").Recorder,
         dummy: *@import("dummy.zig").Recorder,
     },
     .freebsd, .netbsd, .openbsd, .solaris => union(enum) {
         pipewire: *@import("pipewire.zig").Recorder,
-        jack: *@import("jack.zig").Recorder,
         pulseaudio: *@import("pulseaudio.zig").Recorder,
+        jack: *@import("jack.zig").Recorder,
         dummy: *@import("dummy.zig").Recorder,
     },
     .macos, .ios, .watchos, .tvos => union(enum) {
-        // coreaudio: *@import("coreaudio.zig").Recorder,
+        coreaudio: *@import("coreaudio.zig").Recorder,
         dummy: *@import("dummy.zig").Recorder,
     },
     .windows => union(enum) {
