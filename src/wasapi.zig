@@ -159,63 +159,70 @@ pub const Context = struct {
 
     pub fn refresh(self: *Context) !void {
         // get default devices id
-        var default_playback_device: ?*win32.IMMDevice = null;
-        var hr = self.enumerator.?.GetDefaultAudioEndpoint(.render, .multimedia, &default_playback_device);
-        switch (hr) {
-            win32.S_OK => {},
-            win32.E_POINTER => unreachable,
-            win32.E_INVALIDARG => unreachable,
-            win32.E_OUTOFMEMORY => return error.OutOfMemory,
-            // TODO: win32.E_NOTFOUND!?
-            else => return error.OpeningDevice,
-        }
-        defer _ = default_playback_device.?.Release();
 
-        var default_capture_device: ?*win32.IMMDevice = null;
-        hr = self.enumerator.?.GetDefaultAudioEndpoint(.capture, .multimedia, &default_capture_device);
-        switch (hr) {
-            win32.S_OK => {},
-            win32.E_POINTER => unreachable,
-            win32.E_INVALIDARG => unreachable,
-            win32.E_OUTOFMEMORY => return error.OutOfMemory,
-            // TODO: win32.E_NOTFOUND!?
-            else => return error.OpeningDevice,
-        }
-        defer _ = default_capture_device.?.Release();
+        const default_playback_id = blk: {
+            var default_playback_device: ?*win32.IMMDevice = null;
+            var hr = self.enumerator.?.GetDefaultAudioEndpoint(.render, .multimedia, &default_playback_device);
+            switch (hr) {
+                win32.S_OK => {},
+                win32.E_POINTER => unreachable,
+                win32.E_INVALIDARG => unreachable,
+                win32.E_OUTOFMEMORY => return error.OutOfMemory,
+                win32.E_NOT_FOUND => break :blk null,
+                else => return error.OpeningDevice,
+            }
+            defer _ = default_playback_device.?.Release();
 
-        var default_playback_id_u16: ?[*:0]u16 = undefined;
-        hr = default_playback_device.?.GetId(&default_playback_id_u16);
-        defer win32.CoTaskMemFree(default_playback_id_u16);
-        switch (hr) {
-            win32.S_OK => {},
-            win32.E_POINTER => unreachable,
-            win32.E_OUTOFMEMORY => return error.OutOfMemory,
-            else => return error.OpeningDevice,
-        }
-        const default_playback_id = std.unicode.utf16leToUtf8AllocZ(self.allocator, std.mem.span(default_playback_id_u16.?)) catch |err| switch (err) {
-            error.OutOfMemory => return error.OutOfMemory,
-            else => unreachable,
+            var default_playback_id_u16: ?[*:0]u16 = undefined;
+            hr = default_playback_device.?.GetId(&default_playback_id_u16);
+            defer win32.CoTaskMemFree(default_playback_id_u16);
+            switch (hr) {
+                win32.S_OK => {},
+                win32.E_POINTER => unreachable,
+                win32.E_OUTOFMEMORY => return error.OutOfMemory,
+                else => return error.OpeningDevice,
+            }
+
+            break :blk std.unicode.utf16leToUtf8AllocZ(self.allocator, std.mem.span(default_playback_id_u16.?)) catch |err| switch (err) {
+                error.OutOfMemory => return error.OutOfMemory,
+                else => unreachable,
+            };
         };
-        defer self.allocator.free(default_playback_id);
+        defer if (default_playback_id) |id| self.allocator.free(id);
 
-        var default_capture_id_u16: ?[*:0]u16 = undefined;
-        hr = default_capture_device.?.GetId(&default_capture_id_u16);
-        defer win32.CoTaskMemFree(default_capture_id_u16);
-        switch (hr) {
-            win32.S_OK => {},
-            win32.E_POINTER => unreachable,
-            win32.E_OUTOFMEMORY => return error.OutOfMemory,
-            else => return error.OpeningDevice,
-        }
-        const default_capture_id = std.unicode.utf16leToUtf8AllocZ(self.allocator, std.mem.span(default_capture_id_u16.?)) catch |err| switch (err) {
-            error.OutOfMemory => return error.OutOfMemory,
-            else => unreachable,
+        const default_capture_id = blk: {
+            var default_capture_device: ?*win32.IMMDevice = null;
+            var hr = self.enumerator.?.GetDefaultAudioEndpoint(.capture, .multimedia, &default_capture_device);
+            switch (hr) {
+                win32.S_OK => {},
+                win32.E_POINTER => unreachable,
+                win32.E_INVALIDARG => unreachable,
+                win32.E_OUTOFMEMORY => return error.OutOfMemory,
+                win32.E_NOT_FOUND => break :blk null,
+                else => return error.OpeningDevice,
+            }
+            defer _ = default_capture_device.?.Release();
+
+            var default_capture_id_u16: ?[*:0]u16 = undefined;
+            hr = default_capture_device.?.GetId(&default_capture_id_u16);
+            defer win32.CoTaskMemFree(default_capture_id_u16);
+            switch (hr) {
+                win32.S_OK => {},
+                win32.E_POINTER => unreachable,
+                win32.E_OUTOFMEMORY => return error.OutOfMemory,
+                else => return error.OpeningDevice,
+            }
+
+            break :blk std.unicode.utf16leToUtf8AllocZ(self.allocator, std.mem.span(default_capture_id_u16.?)) catch |err| switch (err) {
+                error.OutOfMemory => return error.OutOfMemory,
+                else => unreachable,
+            };
         };
-        defer self.allocator.free(default_capture_id);
+        defer if (default_capture_id) |id| self.allocator.free(id);
 
         // enumerate
         var collection: ?*win32.IMMDeviceCollection = null;
-        hr = self.enumerator.?.EnumAudioEndpoints(
+        var hr = self.enumerator.?.EnumAudioEndpoints(
             win32.DataFlow.all,
             win32.DEVICE_STATE_ACTIVE,
             &collection,
@@ -376,11 +383,15 @@ pub const Context = struct {
             try self.devices_info.list.append(self.allocator, device);
             if (self.devices_info.default(device.mode) == null) {
                 switch (device.mode) {
-                    .playback => if (std.mem.eql(u8, device.id, default_playback_id)) {
-                        self.devices_info.setDefault(.playback, self.devices_info.list.items.len - 1);
+                    .playback => if (default_playback_id) |id| {
+                        if (std.mem.eql(u8, device.id, id)) {
+                            self.devices_info.setDefault(.playback, self.devices_info.list.items.len - 1);
+                        }
                     },
-                    .capture => if (std.mem.eql(u8, device.id, default_capture_id)) {
-                        self.devices_info.setDefault(.capture, self.devices_info.list.items.len - 1);
+                    .capture => if (default_capture_id) |id| {
+                        if (std.mem.eql(u8, device.id, id)) {
+                            self.devices_info.setDefault(.capture, self.devices_info.list.items.len - 1);
+                        }
                     },
                 }
             }
@@ -430,27 +441,32 @@ pub const Context = struct {
         wf.Samples.wValidBitsPerSample = format.validSizeBits();
     }
 
-    pub fn createPlayer(self: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.BackendPlayer {
-        var imm_device: ?*win32.IMMDevice = null;
+    fn createAudioClient(
+        self: *Context,
+        device: main.Device,
+        format: main.Format,
+        sample_rate: u24,
+        imm_device: *?*win32.IMMDevice,
+        audio_client: *?*win32.IAudioClient,
+        audio_client3: *?*win32.IAudioClient3,
+        max_buffer_frames: *u32,
+    ) !void {
         var id_u16 = std.unicode.utf8ToUtf16LeWithNull(self.allocator, device.id) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             else => unreachable,
         };
         defer self.allocator.free(id_u16);
-        var hr = self.enumerator.?.GetDevice(id_u16, &imm_device);
+        var hr = self.enumerator.?.GetDevice(id_u16, imm_device);
         switch (hr) {
             win32.S_OK => {},
             win32.E_POINTER => unreachable,
             win32.E_OUTOFMEMORY => return error.OutOfMemory,
-            // TODO: win32.E_NOTFOUND!?
             else => return error.OpeningDevice,
         }
 
-        var audio_client: ?*win32.IAudioClient = null;
-        var audio_client3: ?*win32.IAudioClient3 = null;
-        hr = imm_device.?.Activate(win32.IID_IAudioClient3, win32.CLSCTX_ALL, null, @as(?*?*anyopaque, @ptrCast(&audio_client3)));
+        hr = imm_device.*.?.Activate(win32.IID_IAudioClient3, win32.CLSCTX_ALL, null, @as(?*?*anyopaque, @ptrCast(audio_client3)));
         if (hr == win32.S_OK) {
-            hr = audio_client3.?.QueryInterface(win32.IID_IAudioClient, @as(?*?*anyopaque, @ptrCast(&audio_client)));
+            hr = audio_client3.*.?.QueryInterface(win32.IID_IAudioClient, @as(?*?*anyopaque, @ptrCast(audio_client)));
             switch (hr) {
                 win32.S_OK => {},
                 win32.E_NOINTERFACE => unreachable,
@@ -458,7 +474,7 @@ pub const Context = struct {
                 else => return error.OpeningDevice,
             }
         } else {
-            hr = imm_device.?.Activate(win32.IID_IAudioClient, win32.CLSCTX_ALL, null, @as(?*?*anyopaque, @ptrCast(&audio_client)));
+            hr = imm_device.*.?.Activate(win32.IID_IAudioClient, win32.CLSCTX_ALL, null, @as(?*?*anyopaque, @ptrCast(audio_client)));
             switch (hr) {
                 win32.S_OK => {},
                 win32.E_POINTER => unreachable,
@@ -469,9 +485,6 @@ pub const Context = struct {
                 else => return error.OpeningDevice,
             }
         }
-
-        const format = device.preferredFormat(options.format);
-        const sample_rate = device.sample_rate.min;
 
         const wave_format = win32.WAVEFORMATEXTENSIBLE{
             .Format = .{
@@ -490,8 +503,8 @@ pub const Context = struct {
             .SubFormat = toSubFormat(format),
         };
 
-        if (!self.is_wine and audio_client3 != null) {
-            hr = audio_client3.?.InitializeSharedAudioStream(
+        if (!self.is_wine and audio_client3.* != null) {
+            hr = audio_client3.*.?.InitializeSharedAudioStream(
                 win32.AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
                 0, // TODO: use the advantage of AudioClient3
                 @as(?*const win32.WAVEFORMATEX, @ptrCast(@alignCast(&wave_format))),
@@ -516,7 +529,7 @@ pub const Context = struct {
                 else => return error.OpeningDevice,
             }
         } else {
-            hr = audio_client.?.Initialize(
+            hr = audio_client.*.?.Initialize(
                 .SHARED,
                 win32.AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
                 0,
@@ -546,36 +559,22 @@ pub const Context = struct {
             }
         }
 
-        var render_client: ?*win32.IAudioRenderClient = null;
-        hr = audio_client.?.GetService(win32.IID_IAudioRenderClient, @as(?*?*anyopaque, @ptrCast(&render_client)));
+        hr = audio_client.*.?.GetBufferSize(max_buffer_frames);
         switch (hr) {
             win32.S_OK => {},
             win32.E_POINTER => unreachable,
-            win32.E_NOINTERFACE => unreachable,
             win32.AUDCLNT_E_NOT_INITIALIZED => unreachable,
-            win32.AUDCLNT_E_WRONG_ENDPOINT_TYPE => unreachable,
-            win32.AUDCLNT_E_DEVICE_INVALIDATED => return error.OpeningDevice,
-            win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return error.OpeningDevice,
-            else => return error.OpeningDevice,
+            win32.AUDCLNT_E_DEVICE_INVALIDATED => return,
+            win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return,
+            else => unreachable,
         }
+    }
 
-        var simple_volume: ?*win32.ISimpleAudioVolume = null;
-        hr = audio_client.?.GetService(win32.IID_ISimpleAudioVolume, @as(?*?*anyopaque, @ptrCast(&simple_volume)));
-        switch (hr) {
-            win32.S_OK => {},
-            win32.E_POINTER => unreachable,
-            win32.E_NOINTERFACE => unreachable,
-            win32.AUDCLNT_E_NOT_INITIALIZED => unreachable,
-            win32.AUDCLNT_E_WRONG_ENDPOINT_TYPE => unreachable,
-            win32.AUDCLNT_E_DEVICE_INVALIDATED => return error.OpeningDevice,
-            win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return error.OpeningDevice,
-            else => return error.OpeningDevice,
-        }
-
+    fn createEvent(audio_client: ?*win32.IAudioClient) !?*anyopaque {
         var ready_event = win32.CreateEventA(null, 0, 0, null) orelse return error.SystemResources;
-        hr = audio_client.?.SetEventHandle(ready_event);
+        const hr = audio_client.?.SetEventHandle(ready_event);
         switch (hr) {
-            win32.S_OK => {},
+            win32.S_OK => return ready_event,
             win32.E_INVALIDARG => unreachable,
             win32.AUDCLNT_E_EVENTHANDLE_NOT_EXPECTED => unreachable,
             win32.AUDCLNT_E_NOT_INITIALIZED => unreachable,
@@ -583,6 +582,48 @@ pub const Context = struct {
             win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return error.OpeningDevice,
             else => return error.OpeningDevice,
         }
+    }
+
+    fn createSimpleVolume(audio_client: ?*win32.IAudioClient) !?*win32.ISimpleAudioVolume {
+        var simple_volume: ?*win32.ISimpleAudioVolume = null;
+        const hr = audio_client.?.GetService(win32.IID_ISimpleAudioVolume, @as(?*?*anyopaque, @ptrCast(&simple_volume)));
+        switch (hr) {
+            win32.S_OK => return simple_volume,
+            win32.E_POINTER => unreachable,
+            win32.E_NOINTERFACE => unreachable,
+            win32.AUDCLNT_E_NOT_INITIALIZED => unreachable,
+            win32.AUDCLNT_E_WRONG_ENDPOINT_TYPE => unreachable,
+            win32.AUDCLNT_E_DEVICE_INVALIDATED => return error.OpeningDevice,
+            win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return error.OpeningDevice,
+            else => return error.OpeningDevice,
+        }
+    }
+
+    pub fn createPlayer(self: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.BackendPlayer {
+        const format = device.preferredFormat(options.format);
+        const sample_rate = device.sample_rate.min;
+
+        var imm_device: ?*win32.IMMDevice = null;
+        var audio_client: ?*win32.IAudioClient = null;
+        var audio_client3: ?*win32.IAudioClient3 = null;
+        var max_buffer_frames: u32 = 0;
+        try self.createAudioClient(device, format, sample_rate, &imm_device, &audio_client, &audio_client3, &max_buffer_frames);
+
+        var render_client: ?*win32.IAudioRenderClient = null;
+        var hr = audio_client.?.GetService(win32.IID_IAudioRenderClient, @as(?*?*anyopaque, @ptrCast(&render_client)));
+        switch (hr) {
+            win32.S_OK => {},
+            win32.E_POINTER => unreachable,
+            win32.E_NOINTERFACE => unreachable,
+            win32.AUDCLNT_E_NOT_INITIALIZED => unreachable,
+            win32.AUDCLNT_E_WRONG_ENDPOINT_TYPE => unreachable,
+            win32.AUDCLNT_E_DEVICE_INVALIDATED => return error.OpeningDevice,
+            win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return error.OpeningDevice,
+            else => return error.OpeningDevice,
+        }
+
+        const simple_volume = try createSimpleVolume(audio_client);
+        const ready_event = try createEvent(audio_client);
 
         var player = try self.allocator.create(Player);
         player.* = .{
@@ -595,6 +636,7 @@ pub const Context = struct {
             .imm_device = imm_device,
             .render_client = render_client,
             .ready_event = ready_event,
+            .max_buffer_frames = max_buffer_frames,
             .aborted = .{ .value = false },
             .is_paused = false,
             .writeFn = writeFn,
@@ -605,6 +647,56 @@ pub const Context = struct {
             .write_step = format.frameSize(device.channels.len),
         };
         return .{ .wasapi = player };
+    }
+
+    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.BackendRecorder {
+        const format = device.preferredFormat(options.format);
+        const sample_rate = device.sample_rate.min;
+
+        var imm_device: ?*win32.IMMDevice = null;
+        var audio_client: ?*win32.IAudioClient = null;
+        var audio_client3: ?*win32.IAudioClient3 = null;
+        var max_buffer_frames: u32 = 0;
+        try self.createAudioClient(device, format, sample_rate, &imm_device, &audio_client, &audio_client3, &max_buffer_frames);
+
+        var capture_client: ?*win32.IAudioCaptureClient = null;
+        var hr = audio_client.?.GetService(win32.IID_IAudioCaptureClient, @as(?*?*anyopaque, @ptrCast(&capture_client)));
+        switch (hr) {
+            win32.S_OK => {},
+            win32.E_POINTER => unreachable,
+            win32.E_NOINTERFACE => unreachable,
+            win32.AUDCLNT_E_NOT_INITIALIZED => unreachable,
+            win32.AUDCLNT_E_WRONG_ENDPOINT_TYPE => unreachable,
+            win32.AUDCLNT_E_DEVICE_INVALIDATED => return error.OpeningDevice,
+            win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return error.OpeningDevice,
+            else => return error.OpeningDevice,
+        }
+
+        const simple_volume = try createSimpleVolume(audio_client);
+        const ready_event = try createEvent(audio_client);
+
+        var recorder = try self.allocator.create(Recorder);
+        recorder.* = .{
+            .allocator = self.allocator,
+            .thread = undefined,
+            .mutex = .{},
+            .audio_client = audio_client,
+            .audio_client3 = audio_client3,
+            .simple_volume = simple_volume,
+            .imm_device = imm_device,
+            .capture_client = capture_client,
+            .ready_event = ready_event,
+            .max_buffer_frames = max_buffer_frames,
+            .aborted = .{ .value = false },
+            .is_paused = false,
+            .readFn = readFn,
+            .user_data = options.user_data,
+            .channels = device.channels,
+            .format = format,
+            .sample_rate = sample_rate,
+            .read_step = format.frameSize(device.channels.len),
+        };
+        return .{ .wasapi = recorder };
     }
 
     fn toSubFormat(format: main.Format) win32.Guid {
@@ -656,7 +748,8 @@ pub const Player = struct {
     audio_client: ?*win32.IAudioClient,
     audio_client3: ?*win32.IAudioClient3,
     render_client: ?*win32.IAudioRenderClient,
-    ready_event: *anyopaque,
+    ready_event: ?*anyopaque,
+    max_buffer_frames: u32,
     aborted: std.atomic.Atomic(bool),
     is_paused: bool,
     writeFn: main.WriteFn,
@@ -679,7 +772,7 @@ pub const Player = struct {
     }
 
     pub fn start(self: *Player) !void {
-        self.thread = std.Thread.spawn(.{}, writeLoop, .{self}) catch |err| switch (err) {
+        self.thread = std.Thread.spawn(.{}, writeThread, .{self}) catch |err| switch (err) {
             error.ThreadQuotaExceeded,
             error.SystemResources,
             error.LockedMemoryLimitExceeded,
@@ -689,7 +782,7 @@ pub const Player = struct {
         };
     }
 
-    fn writeLoop(self: *Player) void {
+    fn writeThread(self: *Player) void {
         var hr = self.audio_client.?.Start();
         switch (hr) {
             win32.S_OK => {},
@@ -704,17 +797,6 @@ pub const Player = struct {
         while (!self.aborted.load(.Unordered)) {
             _ = win32.WaitForSingleObject(self.ready_event, win32.INFINITE);
 
-            var buf_frames: u32 = 0;
-            hr = self.audio_client.?.GetBufferSize(&buf_frames);
-            switch (hr) {
-                win32.S_OK => {},
-                win32.E_POINTER => unreachable,
-                win32.AUDCLNT_E_NOT_INITIALIZED => unreachable,
-                win32.AUDCLNT_E_DEVICE_INVALIDATED => return,
-                win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return,
-                else => unreachable,
-            }
-
             var padding_frames: u32 = 0;
             hr = self.audio_client.?.GetCurrentPadding(&padding_frames);
             switch (hr) {
@@ -725,7 +807,8 @@ pub const Player = struct {
                 win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return,
                 else => unreachable,
             }
-            const frames = buf_frames - padding_frames;
+
+            const frames = self.max_buffer_frames - padding_frames;
             if (frames > 0) {
                 var data: [*]u8 = undefined;
                 hr = self.render_client.?.GetBuffer(frames, @as(?*?*u8, @ptrCast(&data)));
@@ -808,6 +891,172 @@ pub const Player = struct {
     }
 
     pub fn volume(self: Player) !f32 {
+        var vol: f32 = 0;
+        const hr = self.simple_volume.?.GetMasterVolume(&vol);
+        switch (hr) {
+            win32.S_OK => {},
+            win32.E_POINTER => unreachable,
+            win32.AUDCLNT_E_DEVICE_INVALIDATED => return error.CannotGetVolume,
+            win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return error.CannotGetVolume,
+            else => return error.CannotGetVolume,
+        }
+        return vol;
+    }
+};
+
+pub const Recorder = struct {
+    allocator: std.mem.Allocator,
+    thread: std.Thread,
+    mutex: std.Thread.Mutex,
+    simple_volume: ?*win32.ISimpleAudioVolume,
+    imm_device: ?*win32.IMMDevice,
+    audio_client: ?*win32.IAudioClient,
+    audio_client3: ?*win32.IAudioClient3,
+    capture_client: ?*win32.IAudioCaptureClient,
+    ready_event: ?*anyopaque,
+    max_buffer_frames: u32,
+    aborted: std.atomic.Atomic(bool),
+    is_paused: bool,
+    readFn: main.ReadFn,
+    user_data: ?*anyopaque,
+
+    channels: []main.Channel,
+    format: main.Format,
+    sample_rate: u24,
+    read_step: u8,
+
+    pub fn deinit(self: *Recorder) void {
+        self.aborted.store(true, .Unordered);
+        self.thread.join();
+        _ = self.simple_volume.?.Release();
+        _ = self.capture_client.?.Release();
+        _ = self.audio_client.?.Release();
+        _ = self.audio_client3.?.Release();
+        _ = self.imm_device.?.Release();
+        self.allocator.destroy(self);
+    }
+
+    pub fn start(self: *Recorder) !void {
+        self.thread = std.Thread.spawn(.{}, readThread, .{self}) catch |err| switch (err) {
+            error.ThreadQuotaExceeded,
+            error.SystemResources,
+            error.LockedMemoryLimitExceeded,
+            => return error.SystemResources,
+            error.OutOfMemory => return error.OutOfMemory,
+            error.Unexpected => unreachable,
+        };
+    }
+
+    fn readThread(self: *Recorder) void {
+        var hr = self.audio_client.?.Start();
+        switch (hr) {
+            win32.S_OK => {},
+            win32.AUDCLNT_E_NOT_INITIALIZED => unreachable,
+            win32.AUDCLNT_E_NOT_STOPPED => unreachable,
+            win32.AUDCLNT_E_EVENTHANDLE_NOT_SET => unreachable,
+            win32.AUDCLNT_E_DEVICE_INVALIDATED => return,
+            win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return,
+            else => unreachable,
+        }
+
+        while (!self.aborted.load(.Unordered)) {
+            _ = win32.WaitForSingleObject(self.ready_event, win32.INFINITE);
+
+            var padding_frames: u32 = 0;
+            hr = self.audio_client.?.GetCurrentPadding(&padding_frames);
+            switch (hr) {
+                win32.S_OK => {},
+                win32.E_POINTER => unreachable,
+                win32.AUDCLNT_E_NOT_INITIALIZED => unreachable,
+                win32.AUDCLNT_E_DEVICE_INVALIDATED => return,
+                win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return,
+                else => unreachable,
+            }
+
+            var frames = self.max_buffer_frames - padding_frames;
+            if (frames > 0) {
+                var data: [*]u8 = undefined;
+                var flags: u32 = 0;
+                hr = self.capture_client.?.GetBuffer(@as(?*?*u8, @ptrCast(&data)), &frames, &flags, null, null);
+                switch (hr) {
+                    win32.S_OK => {},
+                    win32.E_POINTER => unreachable,
+                    win32.AUDCLNT_E_BUFFER_ERROR => unreachable,
+                    win32.AUDCLNT_E_BUFFER_TOO_LARGE => unreachable,
+                    win32.AUDCLNT_E_BUFFER_SIZE_ERROR => unreachable,
+                    win32.AUDCLNT_E_OUT_OF_ORDER => unreachable,
+                    win32.AUDCLNT_E_DEVICE_INVALIDATED => return,
+                    win32.AUDCLNT_E_BUFFER_OPERATION_PENDING => continue,
+                    win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return,
+                    else => unreachable,
+                }
+
+                for (self.channels, 0..) |*ch, i| {
+                    ch.*.ptr = data + self.format.frameSize(i);
+                }
+
+                self.readFn(self.user_data, frames);
+
+                hr = self.capture_client.?.ReleaseBuffer(frames);
+                switch (hr) {
+                    win32.S_OK => {},
+                    win32.E_INVALIDARG => unreachable,
+                    win32.AUDCLNT_E_INVALID_SIZE => unreachable,
+                    win32.AUDCLNT_E_BUFFER_SIZE_ERROR => unreachable,
+                    win32.AUDCLNT_E_OUT_OF_ORDER => unreachable,
+                    win32.AUDCLNT_E_DEVICE_INVALIDATED => return,
+                    win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return,
+                    else => unreachable,
+                }
+            }
+        }
+    }
+
+    pub fn record(self: *Recorder) !void {
+        if (self.paused()) {
+            const hr = self.audio_client.?.Start();
+            switch (hr) {
+                win32.S_OK => {},
+                win32.AUDCLNT_E_NOT_INITIALIZED => unreachable,
+                win32.AUDCLNT_E_NOT_STOPPED => unreachable,
+                win32.AUDCLNT_E_EVENTHANDLE_NOT_SET => unreachable,
+                win32.AUDCLNT_E_DEVICE_INVALIDATED => return error.CannotRecord,
+                win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return error.CannotRecord,
+                else => unreachable,
+            }
+            self.is_paused = false;
+        }
+    }
+
+    pub fn pause(self: *Recorder) !void {
+        if (!self.paused()) {
+            const hr = self.audio_client.?.Stop();
+            switch (hr) {
+                win32.S_OK => {},
+                win32.AUDCLNT_E_DEVICE_INVALIDATED => return error.CannotPause,
+                win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return error.CannotPause,
+                else => unreachable,
+            }
+            self.is_paused = true;
+        }
+    }
+
+    pub fn paused(self: Recorder) bool {
+        return self.is_paused;
+    }
+
+    pub fn setVolume(self: *Recorder, vol: f32) !void {
+        const hr = self.simple_volume.?.SetMasterVolume(vol, null);
+        switch (hr) {
+            win32.S_OK => {},
+            win32.E_INVALIDARG => unreachable,
+            win32.AUDCLNT_E_DEVICE_INVALIDATED => return error.CannotSetVolume,
+            win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return error.CannotSetVolume,
+            else => return error.CannotSetVolume,
+        }
+    }
+
+    pub fn volume(self: Recorder) !f32 {
         var vol: f32 = 0;
         const hr = self.simple_volume.?.GetMasterVolume(&vol);
         switch (hr) {

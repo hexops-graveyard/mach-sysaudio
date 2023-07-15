@@ -459,7 +459,7 @@ fn unsignedToFloat(comptime T: type, sample: anytype) T {
 
 fn signedToSigned(comptime T: type, sample: anytype) T {
     const trunc = @bitSizeOf(@TypeOf(sample)) - @bitSizeOf(T);
-    return @as(T, @intCast(sample >> trunc));
+    return std.math.shr(T, @as(T, @intCast(sample)), trunc);
 }
 
 fn signedToUnsigned(comptime T: type, sample: anytype) T {

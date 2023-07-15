@@ -91,6 +91,7 @@ pub const HRESULT = i32;
 pub const S_OK = 0;
 pub const S_FALSE = 1;
 pub const E_NOTIMPL = -2147467263;
+pub const E_NOT_FOUND = -2147023728;
 pub const E_OUTOFMEMORY = -2147024882;
 pub const E_INVALIDARG = -2147024809;
 pub const E_FAIL = -2147467259;
@@ -1310,44 +1311,22 @@ const IID_IAudioClient2 = &Guid.initString("726778cd-f60a-4eda-82de-e47610cd78aa
 pub const IAudioClient2 = extern struct {
     pub const VTable = extern struct {
         base: IAudioClient.VTable,
-        IsOffloadCapable: switch (@import("builtin").zig_backend) {
-            .stage1 => fn (
-                self: *const IAudioClient2,
-                Category: AUDIO_STREAM_CATEGORY,
-                pbOffloadCapable: ?*BOOL,
-            ) callconv(WINAPI) HRESULT,
-            else => *const fn (
-                self: *const IAudioClient2,
-                Category: AUDIO_STREAM_CATEGORY,
-                pbOffloadCapable: ?*BOOL,
-            ) callconv(WINAPI) HRESULT,
-        },
-        SetClientProperties: switch (@import("builtin").zig_backend) {
-            .stage1 => fn (
-                self: *const IAudioClient2,
-                pProperties: ?*const AudioClientProperties,
-            ) callconv(WINAPI) HRESULT,
-            else => *const fn (
-                self: *const IAudioClient2,
-                pProperties: ?*const AudioClientProperties,
-            ) callconv(WINAPI) HRESULT,
-        },
-        GetBufferSizeLimits: switch (@import("builtin").zig_backend) {
-            .stage1 => fn (
-                self: *const IAudioClient2,
-                pFormat: ?*const WAVEFORMATEX,
-                bEventDriven: BOOL,
-                phnsMinBufferDuration: ?*i64,
-                phnsMaxBufferDuration: ?*i64,
-            ) callconv(WINAPI) HRESULT,
-            else => *const fn (
-                self: *const IAudioClient2,
-                pFormat: ?*const WAVEFORMATEX,
-                bEventDriven: BOOL,
-                phnsMinBufferDuration: ?*i64,
-                phnsMaxBufferDuration: ?*i64,
-            ) callconv(WINAPI) HRESULT,
-        },
+        IsOffloadCapable: *const fn (
+            self: *const IAudioClient2,
+            Category: AUDIO_STREAM_CATEGORY,
+            pbOffloadCapable: ?*BOOL,
+        ) callconv(WINAPI) HRESULT,
+        SetClientProperties: *const fn (
+            self: *const IAudioClient2,
+            pProperties: ?*const AudioClientProperties,
+        ) callconv(WINAPI) HRESULT,
+        GetBufferSizeLimits: *const fn (
+            self: *const IAudioClient2,
+            pFormat: ?*const WAVEFORMATEX,
+            bEventDriven: BOOL,
+            phnsMinBufferDuration: ?*i64,
+            phnsMaxBufferDuration: ?*i64,
+        ) callconv(WINAPI) HRESULT,
     };
     vtable: *const VTable,
     pub fn MethodMixin(comptime T: type) type {
@@ -1370,52 +1349,26 @@ pub const IID_IAudioClient3 = &Guid.initString("7ed4ee07-8e67-4cd4-8c1a-2b7a5987
 pub const IAudioClient3 = extern struct {
     pub const VTable = extern struct {
         base: IAudioClient2.VTable,
-        GetSharedModeEnginePeriod: switch (@import("builtin").zig_backend) {
-            .stage1 => fn (
-                self: *const IAudioClient3,
-                pFormat: ?*const WAVEFORMATEX,
-                pDefaultPeriodInFrames: ?*u32,
-                pFundamentalPeriodInFrames: ?*u32,
-                pMinPeriodInFrames: ?*u32,
-                pMaxPeriodInFrames: ?*u32,
-            ) callconv(WINAPI) HRESULT,
-            else => *const fn (
-                self: *const IAudioClient3,
-                pFormat: ?*const WAVEFORMATEX,
-                pDefaultPeriodInFrames: ?*u32,
-                pFundamentalPeriodInFrames: ?*u32,
-                pMinPeriodInFrames: ?*u32,
-                pMaxPeriodInFrames: ?*u32,
-            ) callconv(WINAPI) HRESULT,
-        },
-        GetCurrentSharedModeEnginePeriod: switch (@import("builtin").zig_backend) {
-            .stage1 => fn (
-                self: *const IAudioClient3,
-                ppFormat: ?*?*WAVEFORMATEX,
-                pCurrentPeriodInFrames: ?*u32,
-            ) callconv(WINAPI) HRESULT,
-            else => *const fn (
-                self: *const IAudioClient3,
-                ppFormat: ?*?*WAVEFORMATEX,
-                pCurrentPeriodInFrames: ?*u32,
-            ) callconv(WINAPI) HRESULT,
-        },
-        InitializeSharedAudioStream: switch (@import("builtin").zig_backend) {
-            .stage1 => fn (
-                self: *const IAudioClient3,
-                StreamFlags: u32,
-                PeriodInFrames: u32,
-                pFormat: ?*const WAVEFORMATEX,
-                AudioSessionGuid: ?*const Guid,
-            ) callconv(WINAPI) HRESULT,
-            else => *const fn (
-                self: *const IAudioClient3,
-                StreamFlags: u32,
-                PeriodInFrames: u32,
-                pFormat: ?*const WAVEFORMATEX,
-                AudioSessionGuid: ?*const Guid,
-            ) callconv(WINAPI) HRESULT,
-        },
+        GetSharedModeEnginePeriod: *const fn (
+            self: *const IAudioClient3,
+            pFormat: ?*const WAVEFORMATEX,
+            pDefaultPeriodInFrames: ?*u32,
+            pFundamentalPeriodInFrames: ?*u32,
+            pMinPeriodInFrames: ?*u32,
+            pMaxPeriodInFrames: ?*u32,
+        ) callconv(WINAPI) HRESULT,
+        GetCurrentSharedModeEnginePeriod: *const fn (
+            self: *const IAudioClient3,
+            ppFormat: ?*?*WAVEFORMATEX,
+            pCurrentPeriodInFrames: ?*u32,
+        ) callconv(WINAPI) HRESULT,
+        InitializeSharedAudioStream: *const fn (
+            self: *const IAudioClient3,
+            StreamFlags: u32,
+            PeriodInFrames: u32,
+            pFormat: ?*const WAVEFORMATEX,
+            AudioSessionGuid: ?*const Guid,
+        ) callconv(WINAPI) HRESULT,
     };
     vtable: *const VTable,
     pub fn MethodMixin(comptime T: type) type {
@@ -1459,6 +1412,44 @@ pub const IAudioRenderClient = extern struct {
             }
             pub inline fn ReleaseBuffer(self: *const T, NumFramesWritten: u32, dwFlags: u32) HRESULT {
                 return @as(*const IAudioRenderClient.VTable, @ptrCast(self.vtable)).ReleaseBuffer(@as(*const IAudioRenderClient, @ptrCast(self)), NumFramesWritten, dwFlags);
+            }
+        };
+    }
+    pub usingnamespace MethodMixin(@This());
+};
+pub const IID_IAudioCaptureClient = &Guid.initString("c8adbd64-e71e-48a0-a4de-185c395cd317");
+pub const IAudioCaptureClient = extern struct {
+    pub const VTable = extern struct {
+        base: IUnknown.VTable,
+        GetBuffer: *const fn (
+            self: *const IAudioCaptureClient,
+            ppData: ?*?*u8,
+            pNumFramesToRead: ?*u32,
+            pdwFlags: ?*u32,
+            pu64DevicePosition: ?*u64,
+            pu64QPCPosition: ?*u64,
+        ) callconv(WINAPI) HRESULT,
+        ReleaseBuffer: *const fn (
+            self: *const IAudioCaptureClient,
+            NumFramesRead: u32,
+        ) callconv(WINAPI) HRESULT,
+        GetNextPacketSize: *const fn (
+            self: *const IAudioCaptureClient,
+            pNumFramesInNextPacket: ?*u32,
+        ) callconv(WINAPI) HRESULT,
+    };
+    vtable: *const VTable,
+    pub fn MethodMixin(comptime T: type) type {
+        return struct {
+            pub usingnamespace IUnknown.MethodMixin(T);
+            pub inline fn GetBuffer(self: *const T, ppData: ?*?*u8, pNumFramesToRead: ?*u32, pdwFlags: ?*u32, pu64DevicePosition: ?*u64, pu64QPCPosition: ?*u64) HRESULT {
+                return @as(*const IAudioCaptureClient.VTable, @ptrCast(self.vtable)).GetBuffer(@as(*const IAudioCaptureClient, @ptrCast(self)), ppData, pNumFramesToRead, pdwFlags, pu64DevicePosition, pu64QPCPosition);
+            }
+            pub inline fn ReleaseBuffer(self: *const T, NumFramesRead: u32) HRESULT {
+                return @as(*const IAudioCaptureClient.VTable, @ptrCast(self.vtable)).ReleaseBuffer(@as(*const IAudioCaptureClient, @ptrCast(self)), NumFramesRead);
+            }
+            pub inline fn GetNextPacketSize(self: *const T, pNumFramesInNextPacket: ?*u32) HRESULT {
+                return @as(*const IAudioCaptureClient.VTable, @ptrCast(self.vtable)).GetNextPacketSize(@as(*const IAudioCaptureClient, @ptrCast(self)), pNumFramesInNextPacket);
             }
         };
     }

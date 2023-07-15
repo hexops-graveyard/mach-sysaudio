@@ -21,7 +21,7 @@ pub const BackendContext = switch (builtin.os.tag) {
         dummy: *@import("dummy.zig").Context,
     },
     .windows => union(enum) {
-        // wasapi: *@import("wasapi.zig").Context,
+        wasapi: *@import("wasapi.zig").Context,
         dummy: *@import("dummy.zig").Context,
     },
     .freestanding => switch (builtin.cpu.arch) {
@@ -54,7 +54,7 @@ pub const BackendPlayer = switch (builtin.os.tag) {
         dummy: *@import("dummy.zig").Player,
     },
     .windows => union(enum) {
-        // wasapi: *@import("wasapi.zig").Player,
+        wasapi: *@import("wasapi.zig").Player,
         dummy: *@import("dummy.zig").Player,
     },
     .freestanding => switch (builtin.cpu.arch) {
@@ -88,7 +88,7 @@ pub const BackendRecorder = switch (builtin.os.tag) {
         dummy: *@import("dummy.zig").Recorder,
     },
     .windows => union(enum) {
-        // wasapi: *@import("wasapi.zig").Recorder,
+        wasapi: *@import("wasapi.zig").Recorder,
         dummy: *@import("dummy.zig").Recorder,
     },
     .freestanding => switch (builtin.cpu.arch) {
