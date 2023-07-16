@@ -339,6 +339,7 @@ pub const Context = struct {
             return error.OpeningDevice;
         }
 
+        std.debug.assert(io_size == @sizeOf(c.AudioBufferList));
         var buf_list = try self.allocator.create(c.AudioBufferList);
         errdefer self.allocator.destroy(buf_list);
 
@@ -550,6 +551,7 @@ pub const Recorder = struct {
     is_paused: bool,
     vol: f32,
     buf_list: *c.AudioBufferList,
+    m_data: ?[]u8 = null,
     readFn: main.ReadFn,
     user_data: ?*anyopaque,
 
@@ -570,18 +572,33 @@ pub const Recorder = struct {
 
         const self = @as(*Recorder, @ptrCast(@alignCast(self_opaque.?)));
 
-        for (0..self.buf_list.*.mNumberBuffers) |i| {
-            self.buf_list.*.mBuffers[i].mData = null;
-        }
+        // mBuffers is a single-item pointer.
+        std.debug.assert(self.buf_list.*.mBuffers.len == 1);
+        var m_buffer = &self.buf_list.*.mBuffers[0];
 
-        if (c.AudioUnitRender(
+        const new_len = self.format.size() * num_frames;
+        if (self.m_data == null or self.m_data.?.len != new_len) {
+            // Buffer size may grow in the case of multi-channel audio, or shrink in the event that
+            // recording devices are swapped while recording. e.g. if a 2 channel recording device
+            // is unplugged and the default system device becomes a 1 channel device.
+            if (self.m_data) |old| self.allocator.free(old);
+            self.m_data = self.allocator.alloc(u8, new_len) catch return c.noErr;
+        }
+        m_buffer.mData = self.m_data.?.ptr;
+        m_buffer.mDataByteSize = @intCast(self.m_data.?.len);
+        m_buffer.mNumberChannels = @intCast(self.channels.len);
+
+        const err_no = c.AudioUnitRender(
             self.audio_unit,
             action_flags,
             time_stamp,
             bus_number,
             num_frames,
             self.buf_list,
-        ) != 0) {
+        );
+        if (err_no != c.noErr) {
+            // TODO: err_no here is rather helpful, we should indicate what it is back to the user
+            // in this event probably?
             return c.noErr;
         }
 
@@ -596,7 +613,6 @@ pub const Recorder = struct {
         }
 
         self.readFn(self.user_data, num_frames);
-
         return c.noErr;
     }
 
