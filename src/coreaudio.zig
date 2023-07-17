@@ -398,7 +398,7 @@ pub const Context = struct {
             audio_unit,
             c.kAudioOutputUnitProperty_CurrentDevice,
             c.kAudioUnitScope_Output,
-            0,
+            1,
             &device_id,
             @sizeOf(c.AudioDeviceID),
         ) != c.noErr) {
@@ -572,18 +572,20 @@ pub const Recorder = struct {
 
         const self = @as(*Recorder, @ptrCast(@alignCast(self_opaque.?)));
 
-        // mBuffers is a single-item pointer.
-        std.debug.assert(self.buf_list.*.mBuffers.len == 1);
+        // We want interleaved multi-channel audio, when multiple channels are available-so we'll
+        // only use a single buffer. If we wanted non-interleaved audio we would use multiple
+        // buffers.
         var m_buffer = &self.buf_list.*.mBuffers[0];
 
-        const new_len = self.format.size() * num_frames;
+        // Ensure our buffer matches the size needed for the render operation. Note that the buffer
+        // may grow (in the case of multi-channel audio during the first render callback) or shrink
+        // in e.g. the event of the device being unplugged and the default input device switching.
+        const new_len = self.format.size() * num_frames * self.channels.len;
         if (self.m_data == null or self.m_data.?.len != new_len) {
-            // Buffer size may grow in the case of multi-channel audio, or shrink in the event that
-            // recording devices are swapped while recording. e.g. if a 2 channel recording device
-            // is unplugged and the default system device becomes a 1 channel device.
             if (self.m_data) |old| self.allocator.free(old);
             self.m_data = self.allocator.alloc(u8, new_len) catch return c.noErr;
         }
+        self.buf_list.*.mNumberBuffers = 1;
         m_buffer.mData = self.m_data.?.ptr;
         m_buffer.mDataByteSize = @intCast(self.m_data.?.len);
         m_buffer.mNumberChannels = @intCast(self.channels.len);

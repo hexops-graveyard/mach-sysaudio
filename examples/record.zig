@@ -30,7 +30,7 @@ pub fn main() !void {
     std.debug.print("\n", .{});
     std.debug.print("You can play this recording back using e.g.:\n", .{});
     std.debug.print("\n", .{});
-    std.debug.print("  $ ffplay -f f32le -ar {} -ac {} raw_audio", .{recorder.sampleRate(), device.channels.len});
+    std.debug.print("  $ ffplay -f f32le -ar {} -ac {} raw_audio", .{ recorder.sampleRate(), device.channels.len });
     std.debug.print("\n", .{});
     // Note: you may also use e.g.:
     //
