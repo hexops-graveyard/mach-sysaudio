@@ -247,6 +247,7 @@ pub const Context = struct {
         var player = try self.allocator.create(Player);
         errdefer self.allocator.destroy(player);
 
+        // obtain an AudioOutputUnit using an AUHAL component description
         var component_desc = c.AudioComponentDescription{
             .componentType = c.kAudioUnitType_Output,
             .componentSubType = c.kAudioUnitSubType_HALOutput,
@@ -257,9 +258,13 @@ pub const Context = struct {
         const component = c.AudioComponentFindNext(null, &component_desc);
         if (component == null) return error.OpeningDevice;
 
+        // instantiate the audio unit
         var audio_unit: c.AudioComponentInstance = undefined;
         if (c.AudioComponentInstanceNew(component, &audio_unit) != c.noErr) return error.OpeningDevice;
 
+        // Initialize the AUHAL before making any changes or using it. Note that an AUHAL may need
+        // to be initialized twice, e.g. before and after making changes to it, as an AUHAL needs to
+        // be initialized *before* anything is done to it.
         if (c.AudioUnitInitialize(audio_unit) != c.noErr) return error.OpeningDevice;
         errdefer _ = c.AudioUnitUninitialize(audio_unit);
 
@@ -354,6 +359,7 @@ pub const Context = struct {
             return error.OpeningDevice;
         }
 
+        // obtain an AudioOutputUnit using an AUHAL component description
         var component_desc = c.AudioComponentDescription{
             .componentType = c.kAudioUnitType_Output,
             .componentSubType = c.kAudioUnitSubType_HALOutput,
@@ -364,59 +370,64 @@ pub const Context = struct {
         const component = c.AudioComponentFindNext(null, &component_desc);
         if (component == null) return error.OpeningDevice;
 
+        // instantiate the audio unit
         var audio_unit: c.AudioComponentInstance = undefined;
         if (c.AudioComponentInstanceNew(component, &audio_unit) != c.noErr) return error.OpeningDevice;
 
+        // Initialize the AUHAL before making any changes or using it. Note that an AUHAL may need
+        // to be initialized twice, e.g. before and after making changes to it, as an AUHAL needs to
+        // be initialized *before* anything is done to it.
         if (c.AudioUnitInitialize(audio_unit) != c.noErr) return error.OpeningDevice;
         errdefer _ = c.AudioUnitUninitialize(audio_unit);
 
-        var enable_io: u32 = 1;
+        // To obtain the device input, we must enable IO on the input scope of the Audio Unit. Input
+        // must be explicitly enabled with kAudioOutputUnitProperty_EnableIO on Element 1 of the
+        // AUHAL, and this *must be done before* setting the AUHAL's current device. We must also
+        // disable IO on the output scope of the AUHAL, since it can be used for both.
+
+        // Enable AUHAL input
+        const enable_io: u32 = 1;
+        const au_element_input: u32 = 1;
         if (c.AudioUnitSetProperty(
             audio_unit,
             c.kAudioOutputUnitProperty_EnableIO,
             c.kAudioUnitScope_Input,
-            1,
+            au_element_input,
             &enable_io,
             @sizeOf(u32),
         ) != c.noErr) {
             return error.OpeningDevice;
         }
 
-        enable_io = 0;
+        // Disable AUHAL output
+        const disable_io: u32 = 0;
+        const au_element_output: u32 = 0;
         if (c.AudioUnitSetProperty(
             audio_unit,
             c.kAudioOutputUnitProperty_EnableIO,
             c.kAudioUnitScope_Output,
-            0,
-            &enable_io,
+            au_element_output,
+            &disable_io,
             @sizeOf(u32),
         ) != c.noErr) {
             return error.OpeningDevice;
         }
 
+        // Set the audio device to be Audio Unit's current device. A device can only be associated
+        // with an AUHAL after enabling IO.
         if (c.AudioUnitSetProperty(
             audio_unit,
             c.kAudioOutputUnitProperty_CurrentDevice,
-            c.kAudioUnitScope_Output,
-            1,
+            c.kAudioUnitScope_Global,
+            au_element_output,
             &device_id,
             @sizeOf(c.AudioDeviceID),
         ) != c.noErr) {
             return error.OpeningDevice;
         }
 
-        const stream_desc = try createStreamDesc(options.format, options.sample_rate, device.channels.len);
-        if (c.AudioUnitSetProperty(
-            audio_unit,
-            c.kAudioUnitProperty_StreamFormat,
-            c.kAudioUnitScope_Output,
-            1,
-            &stream_desc,
-            @sizeOf(c.AudioStreamBasicDescription),
-        ) != c.noErr) {
-            return error.OpeningDevice;
-        }
-
+        // Register the capture callback for the AUHAL; this will be called when the AUHAL has
+        // received new data from the input device.
         const capture_callback = c.AURenderCallbackStruct{
             .inputProc = Recorder.captureCallback,
             .inputProcRefCon = recorder,
@@ -424,13 +435,31 @@ pub const Context = struct {
         if (c.AudioUnitSetProperty(
             audio_unit,
             c.kAudioOutputUnitProperty_SetInputCallback,
-            c.kAudioUnitScope_Output,
-            1,
+            c.kAudioUnitScope_Global,
+            au_element_output,
             &capture_callback,
             @sizeOf(c.AURenderCallbackStruct),
         ) != c.noErr) {
             return error.OpeningDevice;
         }
+
+        // Set the desired output format.
+        const stream_desc = try createStreamDesc(options.format, options.sample_rate, device.channels.len);
+        if (c.AudioUnitSetProperty(
+            audio_unit,
+            c.kAudioUnitProperty_StreamFormat,
+            c.kAudioUnitScope_Output,
+            au_element_input,
+            &stream_desc,
+            @sizeOf(c.AudioStreamBasicDescription),
+        ) != c.noErr) {
+            return error.OpeningDevice;
+        }
+
+        // Now that we are done with modifying the AUHAL, initialize it once more to ensure that it
+        // is ready to use.
+        if (c.AudioUnitInitialize(audio_unit) != c.noErr) return error.OpeningDevice;
+        errdefer _ = c.AudioUnitUninitialize(audio_unit);
 
         recorder.* = .{
             .allocator = self.allocator,
