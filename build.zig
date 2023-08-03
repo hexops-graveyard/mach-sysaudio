@@ -96,7 +96,10 @@ pub fn link(b: *std.Build, step: *std.build.CompileStep, options: Options) void 
                 .target = step.target,
                 .optimize = step.optimize,
             }).artifact("linux-audio-headers"));
-            step.addCSourceFile(sdkPath("/src/pipewire/sysaudio.c"), &.{"-std=gnu99"});
+            step.addCSourceFile(.{
+                .file = .{ .path = sdkPath("/src/pipewire/sysaudio.c") },
+                .flags = &.{"-std=gnu99"},
+            });
             step.linkLibC();
         }
     }
@@ -150,9 +153,9 @@ const xcode_frameworks = struct {
         // branch: mach
         xEnsureGitRepoCloned(b.allocator, "https://github.com/hexops/xcode-frameworks", "723aa55e9752c8c6c25d3413722b5fe13d72ac4f", xSdkPath("/zig-cache/xcode_frameworks")) catch |err| @panic(@errorName(err));
 
-        step.addFrameworkPath(xSdkPath("/zig-cache/xcode_frameworks/Frameworks"));
-        step.addSystemIncludePath(xSdkPath("/zig-cache/xcode_frameworks/include"));
-        step.addLibraryPath(xSdkPath("/zig-cache/xcode_frameworks/lib"));
+        step.addFrameworkPath(.{ .path = xSdkPath("/zig-cache/xcode_frameworks/Frameworks") });
+        step.addSystemIncludePath(.{ .path = xSdkPath("/zig-cache/xcode_frameworks/include") });
+        step.addLibraryPath(.{ .path = xSdkPath("/zig-cache/xcode_frameworks/lib") });
     }
 
     fn xEnsureGitRepoCloned(allocator: std.mem.Allocator, clone_url: []const u8, revision: []const u8, dir: []const u8) !void {
