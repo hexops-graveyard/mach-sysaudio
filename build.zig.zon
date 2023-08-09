@@ -3,8 +3,8 @@
     .version = "0.2.0",
     .dependencies = .{
         .mach_sysjs = .{
-            .url = "https://pkg.machengine.org/mach-sysjs/3981ad542c0f25158f0ee828ca414720f9c7ce29.tar.gz",
-            .hash = "1220316bef3193b1054139e5c67e3aabcd2cdc2fe9a12318e7ff5656130591aab701",
+            .url = "https://pkg.machengine.org/mach-sysjs/cd011058993f39a3ab473921ff51e0eda5635f99.tar.gz",
+            .hash = "1220d2af1939977838949d435b28de637c29407586b8ac87e35241b1b68c0860e98d",
         },
         .linux_audio_headers = .{
             .url = "https://pkg.machengine.org/linux-audio-headers/7605fcefd39aa342518c60198f53f06cec7f8197.tar.gz",
