@@ -1,18 +1,32 @@
-# mach/sysaudio - cross-platform low-level audio IO in Zig
+<a href="https://machengine.org/pkg/mach-sysaudio">
+    <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://machengine.org/assets/mach/sysaudio-full-dark.svg">
+        <img alt="mach-sysaudio" src="https://machengine.org/assets/mach/sysaudio-full-light.svg" height="150px">
+    </picture>
+</a>
 
-This repository is a separate copy of the same library in the [main Mach repository](https://github.com/hexops/mach), and is automatically kept in sync, so that anyone can use this library in their own project if they like!
+Truly cross-platform, low-level, audio IO in Zig.
 
-## Experimental
+## Features
 
-This is an _experimental_ Mach library, according to our [stability guarantees](https://machengine.org/next/docs/libs/):
+Playback and recording with backends for:
 
-> Experimental libraries may have their APIs change without much notice, and you may have to look at recent changes in order to update your code.
+* Linux
+  * PulseAudio
+  * PipeWire
+  * Jack
+  * ALSA
+* Windows: WASAPI
+* macOS/iOS: CoreAudio
+* WebAssembly: WebAudio
 
-[Why this library is not declared stable yet](https://machengine.org/next/docs/libs/experimental/#sysaudio)
+## Documentation
+
+[machengine.org/pkg/mach-sysaudio](https://machengine.org/pkg/mach-sysaudio)
 
 ## Join the community
 
-Join the Mach community [on Discord](https://discord.gg/XNG3NZgCqp) to discuss this project, ask questions, get help, etc.
+Join the [Mach community on Discord](https://discord.gg/XNG3NZgCqp) to discuss this project, ask questions, get help, etc.
 
 ## Issues
 
