@@ -1,5 +1,5 @@
 const std = @import("std");
-const sysaudio = @import("sysaudio");
+const sysaudio = @import("mach-sysaudio");
 
 var player: sysaudio.Player = undefined;
 
