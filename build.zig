@@ -70,12 +70,7 @@ pub fn build(b: *std.Build) void {
 pub fn link(b: *std.Build, step: *std.build.CompileStep) void {
     if (step.target.toTarget().cpu.arch != .wasm32) {
         if (step.target.toTarget().isDarwin()) {
-            step.linkLibrary(b.dependency("xcode_frameworks", .{
-                .target = step.target,
-                .optimize = step.optimize,
-            }).artifact("xcode-frameworks"));
             @import("xcode_frameworks").addPaths(b, step);
-
             step.linkFramework("AudioToolbox");
             step.linkFramework("CoreFoundation");
             step.linkFramework("CoreAudio");
