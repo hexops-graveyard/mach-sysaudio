@@ -51,7 +51,7 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         });
-        example_exe.addModule("sysaudio", module(b, optimize, target));
+        example_exe.addModule("mach-sysaudio", module(b, optimize, target));
         link(b, example_exe);
         b.installArtifact(example_exe);
 

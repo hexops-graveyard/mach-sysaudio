@@ -1,7 +1,7 @@
 //! Redirects input device into ./raw_audio file.
 
 const std = @import("std");
-const sysaudio = @import("sysaudio");
+const sysaudio = @import("mach-sysaudio");
 
 var recorder: sysaudio.Recorder = undefined;
 var file: std.fs.File = undefined;
