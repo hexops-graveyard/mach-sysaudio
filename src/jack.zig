@@ -194,7 +194,6 @@ pub const Context = struct {
         var player = try self.allocator.create(Player);
         player.* = .{
             .allocator = self.allocator,
-            .mutex = .{},
             .client = self.client,
             .ports = ports,
             .dest_ports = dest_ports,
@@ -224,7 +223,6 @@ pub const Context = struct {
         var recorder = try self.allocator.create(Recorder);
         recorder.* = .{
             .allocator = self.allocator,
-            .mutex = .{},
             .client = self.client,
             .ports = ports,
             .dest_ports = dest_ports,
@@ -242,7 +240,6 @@ pub const Context = struct {
 
 pub const Player = struct {
     allocator: std.mem.Allocator,
-    mutex: std.Thread.Mutex,
     client: *c.jack_client_t,
     ports: []const *c.jack_port_t,
     dest_ports: []const [:0]const u8,
@@ -289,8 +286,6 @@ pub const Player = struct {
     }
 
     pub fn play(self: *Player) !void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
         for (self.ports, 0..) |port, i| {
             if (lib.jack_connect(self.client, lib.jack_port_name(port), self.dest_ports[i].ptr) != 0)
                 return error.CannotPlay;
@@ -298,8 +293,6 @@ pub const Player = struct {
     }
 
     pub fn pause(self: *Player) !void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
         for (self.ports, 0..) |port, i| {
             if (lib.jack_disconnect(self.client, lib.jack_port_name(port), self.dest_ports[i].ptr) != 0)
                 return error.CannotPause;
@@ -307,8 +300,6 @@ pub const Player = struct {
     }
 
     pub fn paused(self: *Player) bool {
-        self.mutex.lock();
-        defer self.mutex.unlock();
         for (self.ports, 0..) |port, i| {
             if (lib.jack_port_connected_to(port, self.dest_ports[i].ptr) == 1)
                 return false;
@@ -331,7 +322,6 @@ pub const Player = struct {
 
 pub const Recorder = struct {
     allocator: std.mem.Allocator,
-    mutex: std.Thread.Mutex,
     client: *c.jack_client_t,
     ports: []const *c.jack_port_t,
     dest_ports: []const [:0]const u8,
@@ -378,8 +368,6 @@ pub const Recorder = struct {
     }
 
     pub fn record(self: *Recorder) !void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
         for (self.ports, 0..) |port, i| {
             if (lib.jack_connect(self.client, lib.jack_port_name(port), self.dest_ports[i].ptr) != 0)
                 return error.CannotRecord;
@@ -387,8 +375,6 @@ pub const Recorder = struct {
     }
 
     pub fn pause(self: *Recorder) !void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
         for (self.ports, 0..) |port, i| {
             if (lib.jack_disconnect(self.client, lib.jack_port_name(port), self.dest_ports[i].ptr) != 0)
                 return error.CannotPause;
@@ -396,8 +382,6 @@ pub const Recorder = struct {
     }
 
     pub fn paused(self: *Recorder) bool {
-        self.mutex.lock();
-        defer self.mutex.unlock();
         for (self.ports, 0..) |port, i| {
             if (lib.jack_port_connected_to(port, self.dest_ports[i].ptr) == 1)
                 return false;

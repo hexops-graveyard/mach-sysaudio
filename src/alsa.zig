@@ -487,7 +487,6 @@ pub const Context = struct {
         player.* = .{
             .allocator = self.allocator,
             .thread = undefined,
-            .mutex = .{},
             .aborted = .{ .value = false },
             .sample_buffer = try self.allocator.alloc(u8, period_size * format.frameSize(device.channels.len)),
             .period_size = period_size,
@@ -519,7 +518,6 @@ pub const Context = struct {
         recorder.* = .{
             .allocator = self.allocator,
             .thread = undefined,
-            .mutex = .{},
             .aborted = .{ .value = false },
             .sample_buffer = try self.allocator.alloc(u8, period_size * format.frameSize(device.channels.len)),
             .period_size = period_size,
@@ -541,7 +539,6 @@ pub const Context = struct {
 pub const Player = struct {
     allocator: std.mem.Allocator,
     thread: std.Thread,
-    mutex: std.Thread.Mutex,
     aborted: std.atomic.Atomic(bool),
     sample_buffer: []u8,
     period_size: c_ulong,
@@ -619,9 +616,6 @@ pub const Player = struct {
     }
 
     pub fn setVolume(self: *Player, vol: f32) !void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
-
         var min_vol: c_long = 0;
         var max_vol: c_long = 0;
         if (lib.snd_mixer_selem_get_playback_volume_range(self.mixer_elm, &min_vol, &max_vol) < 0)
@@ -636,9 +630,6 @@ pub const Player = struct {
     }
 
     pub fn volume(self: *Player) !f32 {
-        self.mutex.lock();
-        defer self.mutex.unlock();
-
         var vol: c_long = 0;
         var channel: c_int = 0;
 
@@ -664,7 +655,6 @@ pub const Player = struct {
 pub const Recorder = struct {
     allocator: std.mem.Allocator,
     thread: std.Thread,
-    mutex: std.Thread.Mutex,
     aborted: std.atomic.Atomic(bool),
     sample_buffer: []u8,
     period_size: c_ulong,
@@ -742,9 +732,6 @@ pub const Recorder = struct {
     }
 
     pub fn setVolume(self: *Recorder, vol: f32) !void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
-
         var min_vol: c_long = 0;
         var max_vol: c_long = 0;
         if (lib.snd_mixer_selem_get_capture_volume_range(self.mixer_elm, &min_vol, &max_vol) < 0)
@@ -759,9 +746,6 @@ pub const Recorder = struct {
     }
 
     pub fn volume(self: *Recorder) !f32 {
-        self.mutex.lock();
-        defer self.mutex.unlock();
-
         var vol: c_long = 0;
         var channel: c_int = 0;
 

@@ -679,7 +679,6 @@ pub const Context = struct {
         recorder.* = .{
             .allocator = self.allocator,
             .thread = undefined,
-            .mutex = .{},
             .audio_client = audio_client,
             .audio_client3 = audio_client3,
             .simple_volume = simple_volume,
@@ -742,7 +741,6 @@ pub const Context = struct {
 pub const Player = struct {
     allocator: std.mem.Allocator,
     thread: std.Thread,
-    mutex: std.Thread.Mutex,
     simple_volume: ?*win32.ISimpleAudioVolume,
     imm_device: ?*win32.IMMDevice,
     audio_client: ?*win32.IAudioClient,
@@ -907,7 +905,6 @@ pub const Player = struct {
 pub const Recorder = struct {
     allocator: std.mem.Allocator,
     thread: std.Thread,
-    mutex: std.Thread.Mutex,
     simple_volume: ?*win32.ISimpleAudioVolume,
     imm_device: ?*win32.IMMDevice,
     audio_client: ?*win32.IAudioClient,
