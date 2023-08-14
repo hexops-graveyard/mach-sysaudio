@@ -81,7 +81,7 @@ pub const Context = struct {
         user_data: ?*anyopaque,
     };
 
-    pub fn init(allocator: std.mem.Allocator, options: main.Context.Options) !backends.BackendContext {
+    pub fn init(allocator: std.mem.Allocator, options: main.Context.Options) !backends.Context {
         try Lib.load();
 
         const main_loop = lib.pa_threaded_mainloop_new() orelse
@@ -287,7 +287,7 @@ pub const Context = struct {
         return self.devices_info.default(mode);
     }
 
-    pub fn createPlayer(self: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.BackendPlayer {
+    pub fn createPlayer(self: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
         lib.pa_threaded_mainloop_lock(self.main_loop);
         defer lib.pa_threaded_mainloop_unlock(self.main_loop);
 
@@ -355,7 +355,7 @@ pub const Context = struct {
         return .{ .pulseaudio = player };
     }
 
-    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.BackendRecorder {
+    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
         lib.pa_threaded_mainloop_lock(self.main_loop);
         defer lib.pa_threaded_mainloop_unlock(self.main_loop);
 

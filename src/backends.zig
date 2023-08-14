@@ -1,8 +1,9 @@
 const builtin = @import("builtin");
 const std = @import("std");
 
-pub const Backend = std.meta.Tag(BackendContext);
-pub const BackendContext = switch (builtin.os.tag) {
+pub const Backend = std.meta.Tag(Context);
+
+pub const Context = switch (builtin.os.tag) {
     .linux => union(enum) {
         pulseaudio: *@import("pulseaudio.zig").Context,
         pipewire: *@import("pipewire.zig").Context,
@@ -26,7 +27,7 @@ pub const BackendContext = switch (builtin.os.tag) {
     },
     .freestanding => switch (builtin.cpu.arch) {
         .wasm32 => union(enum) {
-            // webaudio: *@import("webaudio.zig").Context,
+            webaudio: *@import("webaudio.zig").Context,
             dummy: *@import("dummy.zig").Context,
         },
         else => union(enum) {
@@ -35,7 +36,8 @@ pub const BackendContext = switch (builtin.os.tag) {
     },
     else => union(enum) { dummy: *@import("dummy.zig").Context },
 };
-pub const BackendPlayer = switch (builtin.os.tag) {
+
+pub const Player = switch (builtin.os.tag) {
     .linux => union(enum) {
         pulseaudio: *@import("pulseaudio.zig").Player,
         pipewire: *@import("pipewire.zig").Player,
@@ -59,7 +61,7 @@ pub const BackendPlayer = switch (builtin.os.tag) {
     },
     .freestanding => switch (builtin.cpu.arch) {
         .wasm32 => union(enum) {
-            // webaudio: *@import("webaudio.zig").Player,
+            webaudio: *@import("webaudio.zig").Player,
             dummy: *@import("dummy.zig").Player,
         },
         else => union(enum) {
@@ -69,7 +71,7 @@ pub const BackendPlayer = switch (builtin.os.tag) {
     else => union(enum) { dummy: *@import("dummy.zig").Player },
 };
 
-pub const BackendRecorder = switch (builtin.os.tag) {
+pub const Recorder = switch (builtin.os.tag) {
     .linux => union(enum) {
         pulseaudio: *@import("pulseaudio.zig").Recorder,
         pipewire: *@import("pipewire.zig").Recorder,
@@ -93,7 +95,7 @@ pub const BackendRecorder = switch (builtin.os.tag) {
     },
     .freestanding => switch (builtin.cpu.arch) {
         .wasm32 => union(enum) {
-            // webaudio: *@import("webaudio.zig").Recorder,
+            webaudio: *@import("webaudio.zig").Recorder,
             dummy: *@import("dummy.zig").Recorder,
         },
         else => union(enum) {

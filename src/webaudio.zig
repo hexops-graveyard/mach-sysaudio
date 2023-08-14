@@ -23,7 +23,7 @@ pub const Context = struct {
     allocator: std.mem.Allocator,
     devices_info: util.DevicesInfo,
 
-    pub fn init(allocator: std.mem.Allocator, options: main.Context.Options) !backends.BackendContext {
+    pub fn init(allocator: std.mem.Allocator, options: main.Context.Options) !backends.Context {
         _ = options;
 
         const audio_context = js.global().get("AudioContext");
@@ -67,7 +67,7 @@ pub const Context = struct {
         return self.devices_info.default(mode);
     }
 
-    pub fn createPlayer(self: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.BackendPlayer {
+    pub fn createPlayer(self: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
         const context_options = js.createMap();
         defer context_options.deinit();
         context_options.set("sampleRate", js.createNumber(options.sample_rate));
@@ -125,7 +125,7 @@ pub const Context = struct {
         return .{ .webaudio = player };
     }
 
-    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.BackendRecorder {
+    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
         _ = readFn;
         var recorder = try self.allocator.create(Recorder);
         recorder.* = .{
@@ -170,7 +170,7 @@ pub const Player = struct {
         self.allocator.destroy(self);
     }
 
-    pub fn start(self: Player) !void {
+    pub fn start(self: *Player) !void {
         const destination = self.audio_context.get("destination").view(.object);
         defer destination.deinit();
         _ = self.gain_node.call("connect", &.{destination.toValue()});
@@ -221,7 +221,7 @@ pub const Player = struct {
         self.is_paused = true;
     }
 
-    pub fn paused(self: Player) bool {
+    pub fn paused(self: *Player) bool {
         return self.is_paused;
     }
 
@@ -231,7 +231,7 @@ pub const Player = struct {
         gain.set("value", js.createNumber(vol));
     }
 
-    pub fn volume(self: Player) !f32 {
+    pub fn volume(self: *Player) !f32 {
         const gain = self.gain_node.get("gain").view(.object);
         defer gain.deinit();
         return @as(f32, @floatCast(gain.get("value").view(.num)));
@@ -252,7 +252,7 @@ pub const Recorder = struct {
         self.allocator.destroy(self);
     }
 
-    pub fn start(self: Recorder) !void {
+    pub fn start(self: *Recorder) !void {
         _ = self;
     }
 
@@ -264,7 +264,7 @@ pub const Recorder = struct {
         self.is_paused = true;
     }
 
-    pub fn paused(self: Recorder) bool {
+    pub fn paused(self: *Recorder) bool {
         return self.is_paused;
     }
 
@@ -272,7 +272,7 @@ pub const Recorder = struct {
         self.vol = vol;
     }
 
-    pub fn volume(self: Recorder) !f32 {
+    pub fn volume(self: *Recorder) !f32 {
         return self.vol;
     }
 };

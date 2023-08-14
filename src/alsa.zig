@@ -91,7 +91,7 @@ pub const Context = struct {
         notify_pipe_fd: [2]std.os.fd_t,
     };
 
-    pub fn init(allocator: std.mem.Allocator, options: main.Context.Options) !backends.BackendContext {
+    pub fn init(allocator: std.mem.Allocator, options: main.Context.Options) !backends.Context {
         try Lib.load();
 
         _ = lib.snd_lib_error_set_handler(@as(c.snd_lib_error_handler_t, @ptrCast(&util.doNothing)));
@@ -473,7 +473,7 @@ pub const Context = struct {
         }
     }
 
-    pub fn createPlayer(self: Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.BackendPlayer {
+    pub fn createPlayer(self: Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
         const format = device.preferredFormat(options.format);
         const sample_rate = device.sample_rate.clamp(options.sample_rate);
         var pcm: ?*c.snd_pcm_t = null;
@@ -505,7 +505,7 @@ pub const Context = struct {
         return .{ .alsa = player };
     }
 
-    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.BackendRecorder {
+    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
         const format = device.preferredFormat(options.format);
         const sample_rate = device.sample_rate.clamp(options.sample_rate);
         var pcm: ?*c.snd_pcm_t = null;
@@ -600,21 +600,21 @@ pub const Player = struct {
         }
     }
 
-    pub fn play(self: Player) !void {
+    pub fn play(self: *Player) !void {
         if (lib.snd_pcm_state(self.pcm) == c.SND_PCM_STATE_PAUSED) {
             if (lib.snd_pcm_pause(self.pcm, 0) < 0)
                 return error.CannotPlay;
         }
     }
 
-    pub fn pause(self: Player) !void {
+    pub fn pause(self: *Player) !void {
         if (lib.snd_pcm_state(self.pcm) != c.SND_PCM_STATE_PAUSED) {
             if (lib.snd_pcm_pause(self.pcm, 1) < 0)
                 return error.CannotPause;
         }
     }
 
-    pub fn paused(self: Player) bool {
+    pub fn paused(self: *Player) bool {
         return lib.snd_pcm_state(self.pcm) == c.SND_PCM_STATE_PAUSED;
     }
 
@@ -723,21 +723,21 @@ pub const Recorder = struct {
         }
     }
 
-    pub fn record(self: Recorder) !void {
+    pub fn record(self: *Recorder) !void {
         if (lib.snd_pcm_state(self.pcm) == c.SND_PCM_STATE_PAUSED) {
             if (lib.snd_pcm_pause(self.pcm, 0) < 0)
                 return error.CannotRecord;
         }
     }
 
-    pub fn pause(self: Recorder) !void {
+    pub fn pause(self: *Recorder) !void {
         if (lib.snd_pcm_state(self.pcm) != c.SND_PCM_STATE_PAUSED) {
             if (lib.snd_pcm_pause(self.pcm, 1) < 0)
                 return error.CannotPause;
         }
     }
 
-    pub fn paused(self: Recorder) bool {
+    pub fn paused(self: *Recorder) bool {
         return lib.snd_pcm_state(self.pcm) == c.SND_PCM_STATE_PAUSED;
     }
 

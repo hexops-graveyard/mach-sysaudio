@@ -77,7 +77,7 @@ pub const Context = struct {
         aborted: std.atomic.Atomic(bool),
     };
 
-    pub fn init(allocator: std.mem.Allocator, options: main.Context.Options) !backends.BackendContext {
+    pub fn init(allocator: std.mem.Allocator, options: main.Context.Options) !backends.Context {
         try Lib.load();
 
         lib.pw_init(null, null);
@@ -150,7 +150,7 @@ pub const Context = struct {
         return self.devices_info.default(mode);
     }
 
-    pub fn createPlayer(self: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.BackendPlayer {
+    pub fn createPlayer(self: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
         const media_role = switch (options.media_role) {
             .default => "Screen",
             .game => "Game",
@@ -256,7 +256,7 @@ pub const Context = struct {
         return .{ .pipewire = player };
     }
 
-    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.BackendRecorder {
+    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
         const media_role = switch (options.media_role) {
             .default => "Screen",
             .game => "Game",
@@ -440,7 +440,7 @@ pub const Player = struct {
         self.is_paused.store(true, .Unordered);
     }
 
-    pub fn paused(self: Player) bool {
+    pub fn paused(self: *Player) bool {
         return self.is_paused.load(.Unordered);
     }
 
@@ -448,7 +448,7 @@ pub const Player = struct {
         self.vol = vol;
     }
 
-    pub fn volume(self: Player) !f32 {
+    pub fn volume(self: *Player) !f32 {
         return self.vol;
     }
 };
@@ -517,7 +517,7 @@ pub const Recorder = struct {
         self.is_paused.store(true, .Unordered);
     }
 
-    pub fn paused(self: Recorder) bool {
+    pub fn paused(self: *Recorder) bool {
         return self.is_paused.load(.Unordered);
     }
 
@@ -525,7 +525,7 @@ pub const Recorder = struct {
         self.vol = vol;
     }
 
-    pub fn volume(self: Recorder) !f32 {
+    pub fn volume(self: *Recorder) !f32 {
         return self.vol;
     }
 };
