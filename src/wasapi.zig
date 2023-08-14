@@ -17,7 +17,7 @@ pub const Context = struct {
         notif_client: win32.IMMNotificationClient,
     };
 
-    pub fn init(allocator: std.mem.Allocator, options: main.Context.Options) !backends.BackendContext {
+    pub fn init(allocator: std.mem.Allocator, options: main.Context.Options) !backends.Context {
         const flags = win32.COINIT_APARTMENTTHREADED | win32.COINIT_DISABLE_OLE1DDE;
         var hr = win32.CoInitializeEx(null, flags);
         switch (hr) {
@@ -599,7 +599,7 @@ pub const Context = struct {
         }
     }
 
-    pub fn createPlayer(self: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.BackendPlayer {
+    pub fn createPlayer(self: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
         const format = device.preferredFormat(options.format);
         const sample_rate = device.sample_rate.min;
 
@@ -649,7 +649,7 @@ pub const Context = struct {
         return .{ .wasapi = player };
     }
 
-    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.BackendRecorder {
+    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
         const format = device.preferredFormat(options.format);
         const sample_rate = device.sample_rate.min;
 
@@ -875,7 +875,7 @@ pub const Player = struct {
         }
     }
 
-    pub fn paused(self: Player) bool {
+    pub fn paused(self: *Player) bool {
         return self.is_paused;
     }
 
@@ -890,7 +890,7 @@ pub const Player = struct {
         }
     }
 
-    pub fn volume(self: Player) !f32 {
+    pub fn volume(self: *Player) !f32 {
         var vol: f32 = 0;
         const hr = self.simple_volume.?.GetMasterVolume(&vol);
         switch (hr) {
@@ -1041,7 +1041,7 @@ pub const Recorder = struct {
         }
     }
 
-    pub fn paused(self: Recorder) bool {
+    pub fn paused(self: *Recorder) bool {
         return self.is_paused;
     }
 
@@ -1056,7 +1056,7 @@ pub const Recorder = struct {
         }
     }
 
-    pub fn volume(self: Recorder) !f32 {
+    pub fn volume(self: *Recorder) !f32 {
         var vol: f32 = 0;
         const hr = self.simple_volume.?.GetMasterVolume(&vol);
         switch (hr) {

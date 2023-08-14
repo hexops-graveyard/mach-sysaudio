@@ -14,7 +14,7 @@ pub const Context = struct {
     allocator: std.mem.Allocator,
     devices_info: util.DevicesInfo,
 
-    pub fn init(allocator: std.mem.Allocator, options: main.Context.Options) !backends.BackendContext {
+    pub fn init(allocator: std.mem.Allocator, options: main.Context.Options) !backends.Context {
         _ = options;
 
         if (std.fs.accessAbsolute("/usr/lib/darling", .{})) {
@@ -243,7 +243,7 @@ pub const Context = struct {
         return self.devices_info.default(mode);
     }
 
-    pub fn createPlayer(self: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.BackendPlayer {
+    pub fn createPlayer(self: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
         var player = try self.allocator.create(Player);
         errdefer self.allocator.destroy(player);
 
@@ -322,7 +322,7 @@ pub const Context = struct {
         return .{ .coreaudio = player };
     }
 
-    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.BackendRecorder {
+    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
         var recorder = try self.allocator.create(Recorder);
         errdefer self.allocator.destroy(recorder);
 
@@ -540,7 +540,7 @@ pub const Player = struct {
         self.is_paused = true;
     }
 
-    pub fn paused(self: Player) bool {
+    pub fn paused(self: *Player) bool {
         return self.is_paused;
     }
 
@@ -558,7 +558,7 @@ pub const Player = struct {
         }
     }
 
-    pub fn volume(self: Player) !f32 {
+    pub fn volume(self: *Player) !f32 {
         var vol: f32 = 0;
         if (c.AudioUnitGetParameter(
             self.audio_unit,
@@ -673,7 +673,7 @@ pub const Recorder = struct {
         self.is_paused = true;
     }
 
-    pub fn paused(self: Recorder) bool {
+    pub fn paused(self: *Recorder) bool {
         return self.is_paused;
     }
 
@@ -691,7 +691,7 @@ pub const Recorder = struct {
         }
     }
 
-    pub fn volume(self: Recorder) !f32 {
+    pub fn volume(self: *Recorder) !f32 {
         var vol: f32 = 0;
         if (c.AudioUnitGetParameter(
             self.audio_unit,

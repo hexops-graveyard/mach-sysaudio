@@ -53,7 +53,7 @@ pub const Context = struct {
         user_data: ?*anyopaque,
     };
 
-    pub fn init(allocator: std.mem.Allocator, options: main.Context.Options) !backends.BackendContext {
+    pub fn init(allocator: std.mem.Allocator, options: main.Context.Options) !backends.Context {
         try Lib.load();
 
         lib.jack_set_error_function(@as(?*const fn ([*c]const u8) callconv(.C) void, @ptrCast(&util.doNothing)));
@@ -179,7 +179,7 @@ pub const Context = struct {
         return self.devices_info.default(mode);
     }
 
-    pub fn createPlayer(self: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.BackendPlayer {
+    pub fn createPlayer(self: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
         var ports = try self.allocator.alloc(*c.jack_port_t, device.channels.len);
         var dest_ports = try self.allocator.alloc([:0]const u8, ports.len);
         var buf: [64]u8 = undefined;
@@ -209,7 +209,7 @@ pub const Context = struct {
         return .{ .jack = player };
     }
 
-    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.BackendRecorder {
+    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
         var ports = try self.allocator.alloc(*c.jack_port_t, device.channels.len);
         var dest_ports = try self.allocator.alloc([:0]const u8, ports.len);
         var buf: [64]u8 = undefined;
@@ -324,7 +324,7 @@ pub const Player = struct {
         return self.vol;
     }
 
-    pub fn sampleRate(self: Player) u24 {
+    pub fn sampleRate(self: *Player) u24 {
         return @as(u24, @intCast(lib.jack_get_sample_rate(self.client)));
     }
 };
@@ -413,7 +413,7 @@ pub const Recorder = struct {
         return self.vol;
     }
 
-    pub fn sampleRate(self: Recorder) u24 {
+    pub fn sampleRate(self: *Recorder) u24 {
         return @as(u24, @intCast(lib.jack_get_sample_rate(self.client)));
     }
 };

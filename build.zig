@@ -46,7 +46,7 @@ pub fn build(b: *std.Build) void {
         "record",
     }) |example| {
         const example_exe = b.addExecutable(.{
-            .name = "example-" ++ example,
+            .name = example,
             .root_source_file = .{ .path = "examples/" ++ example ++ ".zig" },
             .target = target,
             .optimize = optimize,
@@ -55,14 +55,14 @@ pub fn build(b: *std.Build) void {
         link(b, example_exe);
         b.installArtifact(example_exe);
 
-        const example_compile_step = b.step("example-" ++ example, "Compile '" ++ example ++ "' example");
+        const example_compile_step = b.step(example, "Compile '" ++ example ++ "' example");
         example_compile_step.dependOn(b.getInstallStep());
 
         const example_run_cmd = b.addRunArtifact(example_exe);
         example_run_cmd.step.dependOn(b.getInstallStep());
         if (b.args) |args| example_run_cmd.addArgs(args);
 
-        const example_run_step = b.step("run-example-" ++ example, "Run '" ++ example ++ "' example");
+        const example_run_step = b.step("run-" ++ example, "Run '" ++ example ++ "' example");
         example_run_step.dependOn(&example_run_cmd.step);
     }
 }
