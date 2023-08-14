@@ -1,4 +1,4 @@
-//! Redirects input device into ./raw_audio file.
+//! Redirects input device into zig-out/raw_audio file.
 
 const std = @import("std");
 const sysaudio = @import("mach-sysaudio");
@@ -20,23 +20,31 @@ pub fn main() !void {
     defer recorder.deinit();
     try recorder.start();
 
-    file = try std.fs.cwd().createFile("raw_audio", .{});
+    const zig_out = try std.fs.cwd().makeOpenPath("zig-out", .{});
+    file = try zig_out.createFile("raw_audio", .{});
 
-    std.debug.print("Recording to ./raw_audio using:\n", .{});
-    std.debug.print("\n", .{});
-    std.debug.print("  device: {s}\n", .{device.name});
-    std.debug.print("  channels: {}\n", .{device.channels.len});
-    std.debug.print("  sample_rate: {}\n", .{recorder.sampleRate()});
-    std.debug.print("\n", .{});
-    std.debug.print("You can play this recording back using e.g.:\n", .{});
-    std.debug.print("\n", .{});
-    std.debug.print("  $ ffplay -f f32le -ar {} -ac {} raw_audio", .{ recorder.sampleRate(), device.channels.len });
-    std.debug.print("\n", .{});
+    std.debug.print(
+        \\Recording to zig-out/raw_audio using:
+        \\
+        \\  device: {s}
+        \\  channels: {}
+        \\  sample_rate: {}
+        \\
+        \\You can play this recording back using e.g.:
+        \\  $ ffplay -f f32le -ar {} -ac {} zig-out/raw_audio
+        \\
+    , .{
+        device.name,
+        device.channels.len,
+        recorder.sampleRate(),
+        recorder.sampleRate(),
+        device.channels.len,
+    });
     // Note: you may also use e.g.:
     //
     // ```
-    // paplay -p --format=FLOAT32LE --rate 48000 --raw ./audio
-    // aplay -c 2 -f FLOAT_LE -r 48000 ./audio
+    // paplay -p --format=FLOAT32LE --rate 48000 --raw zig-out/raw_audio
+    // aplay -c 2 -f FLOAT_LE -r 48000 zig-out/raw_audio
     // ```
 
     while (true) {}
