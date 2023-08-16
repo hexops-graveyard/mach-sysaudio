@@ -629,7 +629,6 @@ pub const Context = struct {
         player.* = .{
             .allocator = self.allocator,
             .thread = undefined,
-            .mutex = .{},
             .audio_client = audio_client,
             .audio_client3 = audio_client3,
             .simple_volume = simple_volume,
