@@ -1,32 +1,19 @@
 const std = @import("std");
 
-var _module: ?*std.build.Module = null;
-
-pub fn module(b: *std.Build, optimize: std.builtin.OptimizeMode, target: std.zig.CrossTarget) *std.build.Module {
-    if (_module) |m| return m;
-
-    if (target.getCpuArch() == .wasm32) {
-        const sysjs_dep = b.dependency("mach_sysjs", .{
-            .target = target,
-            .optimize = optimize,
-        });
-        _module = b.createModule(.{
-            .source_file = .{ .path = sdkPath("/src/main.zig") },
-            .dependencies = &.{
-                .{ .name = "sysjs", .module = sysjs_dep.module("mach-sysjs") },
-            },
-        });
-    } else {
-        _module = b.createModule(.{
-            .source_file = .{ .path = sdkPath("/src/main.zig") },
-        });
-    }
-    return _module.?;
-}
-
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
+
+    const mach_sysjs_dep = b.dependency("mach_sysjs", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const module = b.addModule("mach-sysaudio", .{
+        .source_file = .{ .path = sdkPath("/src/main.zig") },
+        .dependencies = &.{
+            .{ .name = "sysjs", .module = mach_sysjs_dep.module("mach-sysjs") },
+        },
+    });
 
     const main_tests = b.addTest(.{
         .name = "test",
@@ -51,7 +38,7 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         });
-        example_exe.addModule("mach-sysaudio", module(b, optimize, target));
+        example_exe.addModule("mach-sysaudio", module);
         link(b, example_exe);
         b.installArtifact(example_exe);
 
