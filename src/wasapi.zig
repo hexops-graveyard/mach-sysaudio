@@ -162,7 +162,7 @@ pub const Context = struct {
 
         const default_playback_id = blk: {
             var default_playback_device: ?*win32.IMMDevice = null;
-            var hr = self.enumerator.?.GetDefaultAudioEndpoint(.render, .multimedia, &default_playback_device);
+            var hr = self.enumerator.?.GetDefaultAudioEndpoint(.render, .console, &default_playback_device);
             switch (hr) {
                 win32.S_OK => {},
                 win32.E_POINTER => unreachable,
@@ -192,7 +192,7 @@ pub const Context = struct {
 
         const default_capture_id = blk: {
             var default_capture_device: ?*win32.IMMDevice = null;
-            var hr = self.enumerator.?.GetDefaultAudioEndpoint(.capture, .multimedia, &default_capture_device);
+            var hr = self.enumerator.?.GetDefaultAudioEndpoint(.capture, .communications, &default_capture_device);
             switch (hr) {
                 win32.S_OK => {},
                 win32.E_POINTER => unreachable,
