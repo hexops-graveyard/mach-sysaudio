@@ -381,19 +381,17 @@ pub const Context = struct {
             };
 
             try self.devices_info.list.append(self.allocator, device);
-            if (self.devices_info.default(device.mode) == null) {
-                switch (device.mode) {
-                    .playback => if (default_playback_id) |id| {
-                        if (std.mem.eql(u8, device.id, id)) {
-                            self.devices_info.setDefault(.playback, self.devices_info.list.items.len - 1);
-                        }
-                    },
-                    .capture => if (default_capture_id) |id| {
-                        if (std.mem.eql(u8, device.id, id)) {
-                            self.devices_info.setDefault(.capture, self.devices_info.list.items.len - 1);
-                        }
-                    },
-                }
+            switch (device.mode) {
+                .playback => if (default_playback_id) |id| {
+                    if (std.mem.eql(u8, device.id, id)) {
+                        self.devices_info.setDefault(.playback, self.devices_info.list.items.len - 1);
+                    }
+                },
+                .capture => if (default_capture_id) |id| {
+                    if (std.mem.eql(u8, device.id, id)) {
+                        self.devices_info.setDefault(.capture, self.devices_info.list.items.len - 1);
+                    }
+                },
             }
         }
     }
