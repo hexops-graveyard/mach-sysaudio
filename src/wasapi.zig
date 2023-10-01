@@ -159,66 +159,8 @@ pub const Context = struct {
 
     pub fn refresh(self: *Context) !void {
         // get default devices id
-
-        const default_playback_id = blk: {
-            var default_playback_device: ?*win32.IMMDevice = null;
-            var hr = self.enumerator.?.GetDefaultAudioEndpoint(.render, .console, &default_playback_device);
-            switch (hr) {
-                win32.S_OK => {},
-                win32.E_POINTER => unreachable,
-                win32.E_INVALIDARG => unreachable,
-                win32.E_OUTOFMEMORY => return error.OutOfMemory,
-                win32.E_NOT_FOUND => break :blk null,
-                else => return error.OpeningDevice,
-            }
-            defer _ = default_playback_device.?.Release();
-
-            var default_playback_id_u16: ?[*:0]u16 = undefined;
-            hr = default_playback_device.?.GetId(&default_playback_id_u16);
-            defer win32.CoTaskMemFree(default_playback_id_u16);
-            switch (hr) {
-                win32.S_OK => {},
-                win32.E_POINTER => unreachable,
-                win32.E_OUTOFMEMORY => return error.OutOfMemory,
-                else => return error.OpeningDevice,
-            }
-
-            break :blk std.unicode.utf16leToUtf8AllocZ(self.allocator, std.mem.span(default_playback_id_u16.?)) catch |err| switch (err) {
-                error.OutOfMemory => return error.OutOfMemory,
-                else => unreachable,
-            };
-        };
-        defer if (default_playback_id) |id| self.allocator.free(id);
-
-        const default_capture_id = blk: {
-            var default_capture_device: ?*win32.IMMDevice = null;
-            var hr = self.enumerator.?.GetDefaultAudioEndpoint(.capture, .communications, &default_capture_device);
-            switch (hr) {
-                win32.S_OK => {},
-                win32.E_POINTER => unreachable,
-                win32.E_INVALIDARG => unreachable,
-                win32.E_OUTOFMEMORY => return error.OutOfMemory,
-                win32.E_NOT_FOUND => break :blk null,
-                else => return error.OpeningDevice,
-            }
-            defer _ = default_capture_device.?.Release();
-
-            var default_capture_id_u16: ?[*:0]u16 = undefined;
-            hr = default_capture_device.?.GetId(&default_capture_id_u16);
-            defer win32.CoTaskMemFree(default_capture_id_u16);
-            switch (hr) {
-                win32.S_OK => {},
-                win32.E_POINTER => unreachable,
-                win32.E_OUTOFMEMORY => return error.OutOfMemory,
-                else => return error.OpeningDevice,
-            }
-
-            break :blk std.unicode.utf16leToUtf8AllocZ(self.allocator, std.mem.span(default_capture_id_u16.?)) catch |err| switch (err) {
-                error.OutOfMemory => return error.OutOfMemory,
-                else => unreachable,
-            };
-        };
-        defer if (default_capture_id) |id| self.allocator.free(id);
+        const default_playback_id = try self.getDefaultAudioEndpoint(.playback);
+        const default_capture_id = try self.getDefaultAudioEndpoint(.capture);
 
         // enumerate
         var collection: ?*win32.IMMDeviceCollection = null;
@@ -381,19 +323,17 @@ pub const Context = struct {
             };
 
             try self.devices_info.list.append(self.allocator, device);
-            if (self.devices_info.default(device.mode) == null) {
-                switch (device.mode) {
-                    .playback => if (default_playback_id) |id| {
-                        if (std.mem.eql(u8, device.id, id)) {
-                            self.devices_info.setDefault(.playback, self.devices_info.list.items.len - 1);
-                        }
-                    },
-                    .capture => if (default_capture_id) |id| {
-                        if (std.mem.eql(u8, device.id, id)) {
-                            self.devices_info.setDefault(.capture, self.devices_info.list.items.len - 1);
-                        }
-                    },
-                }
+            switch (device.mode) {
+                .playback => if (default_playback_id) |id| {
+                    if (std.mem.eql(u8, device.id, id)) {
+                        self.devices_info.setDefault(.playback, self.devices_info.list.items.len - 1);
+                    }
+                },
+                .capture => if (default_capture_id) |id| {
+                    if (std.mem.eql(u8, device.id, id)) {
+                        self.devices_info.setDefault(.capture, self.devices_info.list.items.len - 1);
+                    }
+                },
             }
         }
     }
@@ -441,6 +381,39 @@ pub const Context = struct {
         }
         wf.Format.wBitsPerSample = format.sizeBits();
         wf.Samples.wValidBitsPerSample = format.validSizeBits();
+    }
+
+    fn getDefaultAudioEndpoint(self: *Context, mode: main.Device.Mode) !?[:0]u8 {
+        var default_playback_device: ?*win32.IMMDevice = null;
+        var hr = self.enumerator.?.GetDefaultAudioEndpoint(
+            if (mode == .playback) .render else .capture,
+            if (mode == .playback) .console else .communications,
+            &default_playback_device,
+        );
+        switch (hr) {
+            win32.S_OK => {},
+            win32.E_POINTER => unreachable,
+            win32.E_INVALIDARG => unreachable,
+            win32.E_OUTOFMEMORY => return error.OutOfMemory,
+            win32.E_NOT_FOUND => return null,
+            else => return error.OpeningDevice,
+        }
+        defer _ = default_playback_device.?.Release();
+
+        var default_playback_id_u16: ?[*:0]u16 = undefined;
+        hr = default_playback_device.?.GetId(&default_playback_id_u16);
+        defer win32.CoTaskMemFree(default_playback_id_u16);
+        switch (hr) {
+            win32.S_OK => {},
+            win32.E_POINTER => unreachable,
+            win32.E_OUTOFMEMORY => return error.OutOfMemory,
+            else => return error.OpeningDevice,
+        }
+
+        return std.unicode.utf16leToUtf8AllocZ(self.allocator, std.mem.span(default_playback_id_u16.?)) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => unreachable,
+        };
     }
 
     fn createAudioClient(
