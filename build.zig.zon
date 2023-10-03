@@ -7,8 +7,8 @@
             .hash = "1220187935c4c5d4cf824927df28e858dcd06cb864bb5d6be4cd349d2836abb4aec4",
         },
         .linux_audio_headers = .{
-            .url = "https://pkg.machengine.org/linux-audio-headers/32aaed47da614b259f8d5efa3aea2b59e4987254.tar.gz",
-            .hash = "122042ed4fbf479e897d3a253f3f43d4f7369f8ec678fa6765c46dbc8b5ac63b1284",
+            .url = "https://pkg.machengine.org/linux-audio-headers/579c751a805de6dd207fb55324fa60ef8cb47e5b.tar.gz",
+            .hash = "1220c4368fe606bebaf55b1eb8cd5a68cbeabb46b67edc76fb5abdb07dca366c9007",
         },
         .xcode_frameworks = .{
             .url = "https://github.com/hexops/xcode-frameworks-pkg/archive/f8b854f9a1f4b4602b4f998ee42588d524d44e52.tar.gz",
