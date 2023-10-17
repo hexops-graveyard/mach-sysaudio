@@ -57,7 +57,7 @@ pub fn build(b: *std.Build) void {
 pub fn link(b: *std.Build, step: *std.build.CompileStep) void {
     if (step.target.toTarget().cpu.arch != .wasm32) {
         if (step.target.toTarget().isDarwin()) {
-            @import("xcode_frameworks").addPaths(b, step);
+            @import("xcode_frameworks").addPaths(step);
             step.linkFramework("AudioToolbox");
             step.linkFramework("CoreFoundation");
             step.linkFramework("CoreAudio");

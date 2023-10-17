@@ -1,18 +1,28 @@
 .{
     .name = "mach-sysaudio",
     .version = "0.2.0",
+    .paths = .{
+        "examples",
+        "src",
+        "build.zig",
+        "build.zig.zon",
+        "LICENSE",
+        "LICENSE-APACHE",
+        "LICENSE-MIT",
+        "README.md",
+    },
     .dependencies = .{
         .mach_sysjs = .{
             .url = "https://pkg.machengine.org/mach-sysjs/bafd6c9b8fd5e7be1e8e24cfbd156703d6026aa8.tar.gz",
             .hash = "1220187935c4c5d4cf824927df28e858dcd06cb864bb5d6be4cd349d2836abb4aec4",
         },
         .linux_audio_headers = .{
-            .url = "https://pkg.machengine.org/linux-audio-headers/579c751a805de6dd207fb55324fa60ef8cb47e5b.tar.gz",
-            .hash = "1220c4368fe606bebaf55b1eb8cd5a68cbeabb46b67edc76fb5abdb07dca366c9007",
+            .url = "https://pkg.machengine.org/linux-audio-headers/6b182ff9d51009ca903f3bac63777fbfa654e5f5.tar.gz",
+            .hash = "122052c4415f4d5be98e3324083939af644d5f8eddd2e6a1a544596645eda8cf411a",
         },
         .xcode_frameworks = .{
-            .url = "https://github.com/hexops/xcode-frameworks-pkg/archive/f8b854f9a1f4b4602b4f998ee42588d524d44e52.tar.gz",
-            .hash = "1220ab440d1b8484038d619f743ef6a71e3683d13152eae941aa2d6bcb12fcea3135",
+            .url = "https://pkg.machengine.org/xcode-frameworks/e77a5c6809a0d3f62ec549ee56e9d2dc6807cd5b.tar.gz",
+            .hash = "12202044ed9fd69af156b0afde619ffd1d111554c557f57ab670ca9960e76d60d0b8",
         },
     },
 }
