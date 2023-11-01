@@ -14,48 +14,46 @@ pub const DevicesInfo = struct {
         };
     }
 
-    pub fn clear(self: *DevicesInfo) void {
-        self.default_output = null;
-        self.default_input = null;
-        self.list.clearRetainingCapacity();
+    pub fn clear(device_info: *DevicesInfo) void {
+        device_info.default_output = null;
+        device_info.default_input = null;
+        device_info.list.clearRetainingCapacity();
     }
 
-    pub fn get(self: DevicesInfo, i: usize) main.Device {
-        return self.list.items[i];
+    pub fn get(device_info: DevicesInfo, i: usize) main.Device {
+        return device_info.list.items[i];
     }
 
-    pub fn default(self: DevicesInfo, mode: main.Device.Mode) ?main.Device {
+    pub fn default(device_info: DevicesInfo, mode: main.Device.Mode) ?main.Device {
         const index = switch (mode) {
-            .playback => self.default_output,
-            .capture => self.default_input,
+            .playback => device_info.default_output,
+            .capture => device_info.default_input,
         } orelse {
-            for (self.list.items) |device| {
+            for (device_info.list.items) |device| {
                 if (device.mode == mode) {
                     return device;
                 }
             }
             return null;
         };
-        return self.get(index);
+        return device_info.get(index);
     }
 
-    pub fn setDefault(self: *DevicesInfo, mode: main.Device.Mode, i: usize) void {
+    pub fn setDefault(device_info: *DevicesInfo, mode: main.Device.Mode, i: usize) void {
         switch (mode) {
-            .playback => self.default_output = i,
-            .capture => self.default_input = i,
+            .playback => device_info.default_output = i,
+            .capture => device_info.default_input = i,
         }
     }
 };
 
 pub fn Range(comptime T: type) type {
     return struct {
-        const Self = @This();
-
         min: T,
         max: T,
 
-        pub fn clamp(self: Self, val: T) T {
-            return std.math.clamp(val, self.min, self.max);
+        pub fn clamp(range: @This(), val: T) T {
+            return std.math.clamp(val, range.min, range.max);
         }
     };
 }

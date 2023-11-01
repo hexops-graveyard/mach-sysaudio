@@ -34,54 +34,54 @@ pub const Context = struct {
     pub fn init(allocator: std.mem.Allocator, options: main.Context.Options) !backends.Context {
         _ = options;
 
-        var self = try allocator.create(Context);
-        errdefer allocator.destroy(self);
-        self.* = .{
+        var ctx = try allocator.create(Context);
+        errdefer allocator.destroy(ctx);
+        ctx.* = .{
             .allocator = allocator,
             .devices_info = util.DevicesInfo.init(),
         };
 
-        return .{ .dummy = self };
+        return .{ .dummy = ctx };
     }
 
-    pub fn deinit(self: *Context) void {
-        for (self.devices_info.list.items) |d|
-            freeDevice(self.allocator, d);
-        self.devices_info.list.deinit(self.allocator);
-        self.allocator.destroy(self);
+    pub fn deinit(ctx: *Context) void {
+        for (ctx.devices_info.list.items) |d|
+            freeDevice(ctx.allocator, d);
+        ctx.devices_info.list.deinit(ctx.allocator);
+        ctx.allocator.destroy(ctx);
     }
 
-    pub fn refresh(self: *Context) !void {
-        for (self.devices_info.list.items) |d|
-            freeDevice(self.allocator, d);
-        self.devices_info.clear();
+    pub fn refresh(ctx: *Context) !void {
+        for (ctx.devices_info.list.items) |d|
+            freeDevice(ctx.allocator, d);
+        ctx.devices_info.clear();
 
-        try self.devices_info.list.append(self.allocator, dummy_playback);
-        try self.devices_info.list.append(self.allocator, dummy_capture);
+        try ctx.devices_info.list.append(ctx.allocator, dummy_playback);
+        try ctx.devices_info.list.append(ctx.allocator, dummy_capture);
 
-        self.devices_info.setDefault(.playback, 0);
-        self.devices_info.setDefault(.capture, 1);
+        ctx.devices_info.setDefault(.playback, 0);
+        ctx.devices_info.setDefault(.capture, 1);
 
-        self.devices_info.list.items[0].channels = try self.allocator.alloc(main.Channel, 1);
-        self.devices_info.list.items[1].channels = try self.allocator.alloc(main.Channel, 1);
+        ctx.devices_info.list.items[0].channels = try ctx.allocator.alloc(main.Channel, 1);
+        ctx.devices_info.list.items[1].channels = try ctx.allocator.alloc(main.Channel, 1);
 
-        self.devices_info.list.items[0].channels[0] = .{ .id = .front_center };
-        self.devices_info.list.items[1].channels[0] = .{ .id = .front_center };
+        ctx.devices_info.list.items[0].channels[0] = .{ .id = .front_center };
+        ctx.devices_info.list.items[1].channels[0] = .{ .id = .front_center };
     }
 
-    pub fn devices(self: Context) []const main.Device {
-        return self.devices_info.list.items;
+    pub fn devices(ctx: Context) []const main.Device {
+        return ctx.devices_info.list.items;
     }
 
-    pub fn defaultDevice(self: Context, mode: main.Device.Mode) ?main.Device {
-        return self.devices_info.default(mode);
+    pub fn defaultDevice(ctx: Context, mode: main.Device.Mode) ?main.Device {
+        return ctx.devices_info.default(mode);
     }
 
-    pub fn createPlayer(self: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
+    pub fn createPlayer(ctx: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
         _ = writeFn;
-        var player = try self.allocator.create(Player);
+        var player = try ctx.allocator.create(Player);
         player.* = .{
-            .allocator = self.allocator,
+            .allocator = ctx.allocator,
             .is_paused = false,
             .vol = 1.0,
             .channels = device.channels,
@@ -92,11 +92,11 @@ pub const Context = struct {
         return .{ .dummy = player };
     }
 
-    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
+    pub fn createRecorder(ctx: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
         _ = readFn;
-        var recorder = try self.allocator.create(Recorder);
+        var recorder = try ctx.allocator.create(Recorder);
         recorder.* = .{
-            .allocator = self.allocator,
+            .allocator = ctx.allocator,
             .is_paused = false,
             .vol = 1.0,
             .channels = device.channels,
@@ -118,32 +118,32 @@ pub const Player = struct {
     sample_rate: u24,
     write_step: u8,
 
-    pub fn deinit(self: *Player) void {
-        self.allocator.destroy(self);
+    pub fn deinit(player: *Player) void {
+        player.allocator.destroy(player);
     }
 
-    pub fn start(self: *Player) !void {
-        _ = self;
+    pub fn start(player: *Player) !void {
+        _ = player;
     }
 
-    pub fn play(self: *Player) !void {
-        self.is_paused = false;
+    pub fn play(player: *Player) !void {
+        player.is_paused = false;
     }
 
-    pub fn pause(self: *Player) !void {
-        self.is_paused = true;
+    pub fn pause(player: *Player) !void {
+        player.is_paused = true;
     }
 
-    pub fn paused(self: *Player) bool {
-        return self.is_paused;
+    pub fn paused(player: *Player) bool {
+        return player.is_paused;
     }
 
-    pub fn setVolume(self: *Player, vol: f32) !void {
-        self.vol = vol;
+    pub fn setVolume(player: *Player, vol: f32) !void {
+        player.vol = vol;
     }
 
-    pub fn volume(self: *Player) !f32 {
-        return self.vol;
+    pub fn volume(player: *Player) !f32 {
+        return player.vol;
     }
 };
 
@@ -157,32 +157,32 @@ pub const Recorder = struct {
     sample_rate: u24,
     read_step: u8,
 
-    pub fn deinit(self: *Recorder) void {
-        self.allocator.destroy(self);
+    pub fn deinit(recorder: *Recorder) void {
+        recorder.allocator.destroy(recorder);
     }
 
-    pub fn start(self: *Recorder) !void {
-        _ = self;
+    pub fn start(recorder: *Recorder) !void {
+        _ = recorder;
     }
 
-    pub fn record(self: *Recorder) !void {
-        self.is_paused = false;
+    pub fn record(recorder: *Recorder) !void {
+        recorder.is_paused = false;
     }
 
-    pub fn pause(self: *Recorder) !void {
-        self.is_paused = true;
+    pub fn pause(recorder: *Recorder) !void {
+        recorder.is_paused = true;
     }
 
-    pub fn paused(self: *Recorder) bool {
-        return self.is_paused;
+    pub fn paused(recorder: *Recorder) bool {
+        return recorder.is_paused;
     }
 
-    pub fn setVolume(self: *Recorder, vol: f32) !void {
-        self.vol = vol;
+    pub fn setVolume(recorder: *Recorder, vol: f32) !void {
+        recorder.vol = vol;
     }
 
-    pub fn volume(self: *Recorder) !f32 {
-        return self.vol;
+    pub fn volume(recorder: *Recorder) !f32 {
+        return recorder.vol;
     }
 };
 

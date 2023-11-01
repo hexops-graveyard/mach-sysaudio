@@ -21,27 +21,27 @@ pub const Context = struct {
             is_darling = true;
         } else |_| {}
 
-        var self = try allocator.create(Context);
-        errdefer allocator.destroy(self);
-        self.* = .{
+        var ctx = try allocator.create(Context);
+        errdefer allocator.destroy(ctx);
+        ctx.* = .{
             .allocator = allocator,
             .devices_info = util.DevicesInfo.init(),
         };
 
-        return .{ .coreaudio = self };
+        return .{ .coreaudio = ctx };
     }
 
-    pub fn deinit(self: *Context) void {
-        for (self.devices_info.list.items) |d|
-            freeDevice(self.allocator, d);
-        self.devices_info.list.deinit(self.allocator);
-        self.allocator.destroy(self);
+    pub fn deinit(ctx: *Context) void {
+        for (ctx.devices_info.list.items) |d|
+            freeDevice(ctx.allocator, d);
+        ctx.devices_info.list.deinit(ctx.allocator);
+        ctx.allocator.destroy(ctx);
     }
 
-    pub fn refresh(self: *Context) !void {
-        for (self.devices_info.list.items) |d|
-            freeDevice(self.allocator, d);
-        self.devices_info.clear();
+    pub fn refresh(ctx: *Context) !void {
+        for (ctx.devices_info.list.items) |d|
+            freeDevice(ctx.allocator, d);
+        ctx.devices_info.clear();
 
         var prop_address = c.AudioObjectPropertyAddress{
             .mSelector = c.kAudioHardwarePropertyDevices,
@@ -63,8 +63,8 @@ pub const Context = struct {
         const devices_count = io_size / @sizeOf(c.AudioObjectID);
         if (devices_count == 0) return;
 
-        var devs = try self.allocator.alloc(c.AudioObjectID, devices_count);
-        defer self.allocator.free(devs);
+        var devs = try ctx.allocator.alloc(c.AudioObjectID, devices_count);
+        defer ctx.allocator.free(devs);
         if (c.AudioObjectGetPropertyData(
             c.kAudioObjectSystemObject,
             &prop_address,
@@ -98,8 +98,8 @@ pub const Context = struct {
         }
 
         for (devs) |id| {
-            var buf_list = try self.allocator.create(c.AudioBufferList);
-            defer self.allocator.destroy(buf_list);
+            var buf_list = try ctx.allocator.create(c.AudioBufferList);
+            defer ctx.allocator.destroy(buf_list);
 
             for (std.meta.tags(main.Device.Mode)) |mode| {
                 io_size = 0;
@@ -168,7 +168,7 @@ pub const Context = struct {
                     output_channel_count += output_audio_buffer_list.mBuffers[mBufferIndex].mNumberChannels;
                 }
 
-                var channels = try self.allocator.alloc(main.Channel, output_channel_count);
+                var channels = try ctx.allocator.alloc(main.Channel, output_channel_count);
 
                 prop_address.mSelector = c.kAudioDevicePropertyNominalSampleRate;
                 io_size = @sizeOf(f64);
@@ -196,8 +196,8 @@ pub const Context = struct {
                     return error.OpeningDevice;
                 }
 
-                const name = try self.allocator.allocSentinel(u8, io_size, 0);
-                errdefer self.allocator.free(name);
+                const name = try ctx.allocator.allocSentinel(u8, io_size, 0);
+                errdefer ctx.allocator.free(name);
                 if (c.AudioDeviceGetProperty(
                     id,
                     0,
@@ -208,8 +208,8 @@ pub const Context = struct {
                 ) != c.noErr) {
                     return error.OpeningDevice;
                 }
-                const id_str = try std.fmt.allocPrintZ(self.allocator, "{d}", .{id});
-                errdefer self.allocator.free(id_str);
+                const id_str = try std.fmt.allocPrintZ(ctx.allocator, "{d}", .{id});
+                errdefer ctx.allocator.free(id_str);
 
                 var dev = main.Device{
                     .id = id_str,
@@ -223,29 +223,29 @@ pub const Context = struct {
                     },
                 };
 
-                try self.devices_info.list.append(self.allocator, dev);
+                try ctx.devices_info.list.append(ctx.allocator, dev);
                 if (id == default_output_id and mode == .playback) {
-                    self.devices_info.default_output = self.devices_info.list.items.len - 1;
+                    ctx.devices_info.default_output = ctx.devices_info.list.items.len - 1;
                 }
 
                 if (id == default_input_id and mode == .capture) {
-                    self.devices_info.default_input = self.devices_info.list.items.len - 1;
+                    ctx.devices_info.default_input = ctx.devices_info.list.items.len - 1;
                 }
             }
         }
     }
 
-    pub fn devices(self: Context) []const main.Device {
-        return self.devices_info.list.items;
+    pub fn devices(ctx: Context) []const main.Device {
+        return ctx.devices_info.list.items;
     }
 
-    pub fn defaultDevice(self: Context, mode: main.Device.Mode) ?main.Device {
-        return self.devices_info.default(mode);
+    pub fn defaultDevice(ctx: Context, mode: main.Device.Mode) ?main.Device {
+        return ctx.devices_info.default(mode);
     }
 
-    pub fn createPlayer(self: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
-        var player = try self.allocator.create(Player);
-        errdefer self.allocator.destroy(player);
+    pub fn createPlayer(ctx: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
+        var player = try ctx.allocator.create(Player);
+        errdefer ctx.allocator.destroy(player);
 
         // obtain an AudioOutputUnit using an AUHAL component description
         var component_desc = c.AudioComponentDescription{
@@ -308,7 +308,7 @@ pub const Context = struct {
         }
 
         player.* = .{
-            .allocator = self.allocator,
+            .allocator = ctx.allocator,
             .audio_unit = audio_unit.?,
             .is_paused = false,
             .vol = 1.0,
@@ -322,9 +322,9 @@ pub const Context = struct {
         return .{ .coreaudio = player };
     }
 
-    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
-        var recorder = try self.allocator.create(Recorder);
-        errdefer self.allocator.destroy(recorder);
+    pub fn createRecorder(ctx: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
+        var recorder = try ctx.allocator.create(Recorder);
+        errdefer ctx.allocator.destroy(recorder);
 
         const device_id = std.fmt.parseInt(c.AudioDeviceID, device.id, 10) catch unreachable;
         var io_size: u32 = 0;
@@ -345,8 +345,8 @@ pub const Context = struct {
         }
 
         std.debug.assert(io_size == @sizeOf(c.AudioBufferList));
-        var buf_list = try self.allocator.create(c.AudioBufferList);
-        errdefer self.allocator.destroy(buf_list);
+        var buf_list = try ctx.allocator.create(c.AudioBufferList);
+        errdefer ctx.allocator.destroy(buf_list);
 
         if (c.AudioObjectGetPropertyData(
             device_id,
@@ -462,7 +462,7 @@ pub const Context = struct {
         errdefer _ = c.AudioUnitUninitialize(audio_unit);
 
         recorder.* = .{
-            .allocator = self.allocator,
+            .allocator = ctx.allocator,
             .audio_unit = audio_unit.?,
             .is_paused = false,
             .vol = 1.0,
@@ -492,7 +492,7 @@ pub const Player = struct {
     write_step: u8,
 
     pub fn renderCallback(
-        self_opaque: ?*anyopaque,
+        player_opaque: ?*anyopaque,
         action_flags: [*c]c.AudioUnitRenderActionFlags,
         time_stamp: [*c]const c.AudioTimeStamp,
         bus_number: u32,
@@ -504,49 +504,49 @@ pub const Player = struct {
         _ = bus_number;
         _ = frames_left;
 
-        const self = @as(*Player, @ptrCast(@alignCast(self_opaque.?)));
+        const player = @as(*Player, @ptrCast(@alignCast(player_opaque.?)));
 
-        for (self.channels, 0..) |*ch, i| {
-            ch.ptr = @as([*]u8, @ptrCast(buf.*.mBuffers[0].mData.?)) + self.format.frameSize(i);
+        for (player.channels, 0..) |*ch, i| {
+            ch.ptr = @as([*]u8, @ptrCast(buf.*.mBuffers[0].mData.?)) + player.format.frameSize(i);
         }
-        const frames = buf.*.mBuffers[0].mDataByteSize / self.format.frameSize(self.channels.len);
-        self.writeFn(self.user_data, frames);
+        const frames = buf.*.mBuffers[0].mDataByteSize / player.format.frameSize(player.channels.len);
+        player.writeFn(player.user_data, frames);
 
         return c.noErr;
     }
 
-    pub fn deinit(self: *Player) void {
-        _ = c.AudioOutputUnitStop(self.audio_unit);
-        _ = c.AudioUnitUninitialize(self.audio_unit);
-        _ = c.AudioComponentInstanceDispose(self.audio_unit);
-        self.allocator.destroy(self);
+    pub fn deinit(player: *Player) void {
+        _ = c.AudioOutputUnitStop(player.audio_unit);
+        _ = c.AudioUnitUninitialize(player.audio_unit);
+        _ = c.AudioComponentInstanceDispose(player.audio_unit);
+        player.allocator.destroy(player);
     }
 
-    pub fn start(self: *Player) !void {
-        try self.play();
+    pub fn start(player: *Player) !void {
+        try player.play();
     }
 
-    pub fn play(self: *Player) !void {
-        if (c.AudioOutputUnitStart(self.audio_unit) != c.noErr) {
+    pub fn play(player: *Player) !void {
+        if (c.AudioOutputUnitStart(player.audio_unit) != c.noErr) {
             return error.CannotPlay;
         }
-        self.is_paused = false;
+        player.is_paused = false;
     }
 
-    pub fn pause(self: *Player) !void {
-        if (c.AudioOutputUnitStop(self.audio_unit) != c.noErr) {
+    pub fn pause(player: *Player) !void {
+        if (c.AudioOutputUnitStop(player.audio_unit) != c.noErr) {
             return error.CannotPause;
         }
-        self.is_paused = true;
+        player.is_paused = true;
     }
 
-    pub fn paused(self: *Player) bool {
-        return self.is_paused;
+    pub fn paused(player: *Player) bool {
+        return player.is_paused;
     }
 
-    pub fn setVolume(self: *Player, vol: f32) !void {
+    pub fn setVolume(player: *Player, vol: f32) !void {
         if (c.AudioUnitSetParameter(
-            self.audio_unit,
+            player.audio_unit,
             c.kHALOutputParam_Volume,
             c.kAudioUnitScope_Global,
             0,
@@ -558,10 +558,10 @@ pub const Player = struct {
         }
     }
 
-    pub fn volume(self: *Player) !f32 {
+    pub fn volume(player: *Player) !f32 {
         var vol: f32 = 0;
         if (c.AudioUnitGetParameter(
-            self.audio_unit,
+            player.audio_unit,
             c.kHALOutputParam_Volume,
             c.kAudioUnitScope_Global,
             0,
@@ -590,7 +590,7 @@ pub const Recorder = struct {
     read_step: u8,
 
     pub fn captureCallback(
-        self_opaque: ?*anyopaque,
+        recorder_opaque: ?*anyopaque,
         action_flags: [*c]c.AudioUnitRenderActionFlags,
         time_stamp: [*c]const c.AudioTimeStamp,
         bus_number: u32,
@@ -599,33 +599,33 @@ pub const Recorder = struct {
     ) callconv(.C) c.OSStatus {
         _ = buffer_list;
 
-        const self = @as(*Recorder, @ptrCast(@alignCast(self_opaque.?)));
+        const recorder = @as(*Recorder, @ptrCast(@alignCast(recorder_opaque.?)));
 
         // We want interleaved multi-channel audio, when multiple channels are available-so we'll
         // only use a single buffer. If we wanted non-interleaved audio we would use multiple
         // buffers.
-        var m_buffer = &self.buf_list.*.mBuffers[0];
+        var m_buffer = &recorder.buf_list.*.mBuffers[0];
 
         // Ensure our buffer matches the size needed for the render operation. Note that the buffer
         // may grow (in the case of multi-channel audio during the first render callback) or shrink
         // in e.g. the event of the device being unplugged and the default input device switching.
-        const new_len = self.format.size() * num_frames * self.channels.len;
-        if (self.m_data == null or self.m_data.?.len != new_len) {
-            if (self.m_data) |old| self.allocator.free(old);
-            self.m_data = self.allocator.alloc(u8, new_len) catch return c.noErr;
+        const new_len = recorder.format.size() * num_frames * recorder.channels.len;
+        if (recorder.m_data == null or recorder.m_data.?.len != new_len) {
+            if (recorder.m_data) |old| recorder.allocator.free(old);
+            recorder.m_data = recorder.allocator.alloc(u8, new_len) catch return c.noErr;
         }
-        self.buf_list.*.mNumberBuffers = 1;
-        m_buffer.mData = self.m_data.?.ptr;
-        m_buffer.mDataByteSize = @intCast(self.m_data.?.len);
-        m_buffer.mNumberChannels = @intCast(self.channels.len);
+        recorder.buf_list.*.mNumberBuffers = 1;
+        m_buffer.mData = recorder.m_data.?.ptr;
+        m_buffer.mDataByteSize = @intCast(recorder.m_data.?.len);
+        m_buffer.mNumberChannels = @intCast(recorder.channels.len);
 
         const err_no = c.AudioUnitRender(
-            self.audio_unit,
+            recorder.audio_unit,
             action_flags,
             time_stamp,
             bus_number,
             num_frames,
-            self.buf_list,
+            recorder.buf_list,
         );
         if (err_no != c.noErr) {
             // TODO: err_no here is rather helpful, we should indicate what it is back to the user
@@ -633,53 +633,53 @@ pub const Recorder = struct {
             return c.noErr;
         }
 
-        if (self.buf_list.*.mNumberBuffers == 1) {
-            for (self.channels, 0..) |*ch, i| {
-                ch.ptr = @as([*]u8, @ptrCast(self.buf_list.*.mBuffers[0].mData.?)) + self.format.frameSize(i);
+        if (recorder.buf_list.*.mNumberBuffers == 1) {
+            for (recorder.channels, 0..) |*ch, i| {
+                ch.ptr = @as([*]u8, @ptrCast(recorder.buf_list.*.mBuffers[0].mData.?)) + recorder.format.frameSize(i);
             }
         } else {
-            for (self.channels, 0..) |*ch, i| {
-                ch.ptr = @as([*]u8, @ptrCast(self.buf_list.*.mBuffers[i].mData.?));
+            for (recorder.channels, 0..) |*ch, i| {
+                ch.ptr = @as([*]u8, @ptrCast(recorder.buf_list.*.mBuffers[i].mData.?));
             }
         }
 
-        self.readFn(self.user_data, num_frames);
+        recorder.readFn(recorder.user_data, num_frames);
         return c.noErr;
     }
 
-    pub fn deinit(self: *Recorder) void {
-        _ = c.AudioOutputUnitStop(self.audio_unit);
-        _ = c.AudioUnitUninitialize(self.audio_unit);
-        _ = c.AudioComponentInstanceDispose(self.audio_unit);
-        self.allocator.destroy(self.buf_list);
-        self.allocator.destroy(self);
+    pub fn deinit(recorder: *Recorder) void {
+        _ = c.AudioOutputUnitStop(recorder.audio_unit);
+        _ = c.AudioUnitUninitialize(recorder.audio_unit);
+        _ = c.AudioComponentInstanceDispose(recorder.audio_unit);
+        recorder.allocator.destroy(recorder.buf_list);
+        recorder.allocator.destroy(recorder);
     }
 
-    pub fn start(self: *Recorder) !void {
-        try self.record();
+    pub fn start(recorder: *Recorder) !void {
+        try recorder.record();
     }
 
-    pub fn record(self: *Recorder) !void {
-        if (c.AudioOutputUnitStart(self.audio_unit) != c.noErr) {
+    pub fn record(recorder: *Recorder) !void {
+        if (c.AudioOutputUnitStart(recorder.audio_unit) != c.noErr) {
             return error.CannotRecord;
         }
-        self.is_paused = false;
+        recorder.is_paused = false;
     }
 
-    pub fn pause(self: *Recorder) !void {
-        if (c.AudioOutputUnitStop(self.audio_unit) != c.noErr) {
+    pub fn pause(recorder: *Recorder) !void {
+        if (c.AudioOutputUnitStop(recorder.audio_unit) != c.noErr) {
             return error.CannotPause;
         }
-        self.is_paused = true;
+        recorder.is_paused = true;
     }
 
-    pub fn paused(self: *Recorder) bool {
-        return self.is_paused;
+    pub fn paused(recorder: *Recorder) bool {
+        return recorder.is_paused;
     }
 
-    pub fn setVolume(self: *Recorder, vol: f32) !void {
+    pub fn setVolume(recorder: *Recorder, vol: f32) !void {
         if (c.AudioUnitSetParameter(
-            self.audio_unit,
+            recorder.audio_unit,
             c.kHALOutputParam_Volume,
             c.kAudioUnitScope_Global,
             0,
@@ -691,10 +691,10 @@ pub const Recorder = struct {
         }
     }
 
-    pub fn volume(self: *Recorder) !f32 {
+    pub fn volume(recorder: *Recorder) !f32 {
         var vol: f32 = 0;
         if (c.AudioUnitGetParameter(
-            self.audio_unit,
+            recorder.audio_unit,
             c.kHALOutputParam_Volume,
             c.kAudioUnitScope_Global,
             0,

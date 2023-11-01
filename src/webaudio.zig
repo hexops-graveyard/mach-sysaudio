@@ -30,44 +30,44 @@ pub const Context = struct {
         if (audio_context.is(.undefined))
             return error.ConnectionRefused;
 
-        var self = try allocator.create(Context);
-        errdefer allocator.destroy(self);
-        self.* = .{
+        var ctx = try allocator.create(Context);
+        errdefer allocator.destroy(ctx);
+        ctx.* = .{
             .allocator = allocator,
             .devices_info = util.DevicesInfo.init(),
         };
 
-        return .{ .webaudio = self };
+        return .{ .webaudio = ctx };
     }
 
-    pub fn deinit(self: *Context) void {
-        for (self.devices_info.list.items) |d|
-            freeDevice(self.allocator, d);
-        self.devices_info.list.deinit(self.allocator);
-        self.allocator.destroy(self);
+    pub fn deinit(ctx: *Context) void {
+        for (ctx.devices_info.list.items) |d|
+            freeDevice(ctx.allocator, d);
+        ctx.devices_info.list.deinit(ctx.allocator);
+        ctx.allocator.destroy(ctx);
     }
 
-    pub fn refresh(self: *Context) !void {
-        for (self.devices_info.list.items) |d|
-            freeDevice(self.allocator, d);
-        self.devices_info.clear(self.allocator);
+    pub fn refresh(ctx: *Context) !void {
+        for (ctx.devices_info.list.items) |d|
+            freeDevice(ctx.allocator, d);
+        ctx.devices_info.clear(ctx.allocator);
 
-        try self.devices_info.list.append(self.allocator, default_playback);
-        self.devices_info.list.items[0].channels = try self.allocator.alloc(main.Channel, 2);
-        self.devices_info.list.items[0].channels[0] = .{ .id = .front_left };
-        self.devices_info.list.items[0].channels[1] = .{ .id = .front_right };
-        self.devices_info.setDefault(.playback, 0);
+        try ctx.devices_info.list.append(ctx.allocator, default_playback);
+        ctx.devices_info.list.items[0].channels = try ctx.allocator.alloc(main.Channel, 2);
+        ctx.devices_info.list.items[0].channels[0] = .{ .id = .front_left };
+        ctx.devices_info.list.items[0].channels[1] = .{ .id = .front_right };
+        ctx.devices_info.setDefault(.playback, 0);
     }
 
-    pub fn devices(self: Context) []const main.Device {
-        return self.devices_info.list.items;
+    pub fn devices(ctx: Context) []const main.Device {
+        return ctx.devices_info.list.items;
     }
 
-    pub fn defaultDevice(self: Context, mode: main.Device.Mode) ?main.Device {
-        return self.devices_info.default(mode);
+    pub fn defaultDevice(ctx: Context, mode: main.Device.Mode) ?main.Device {
+        return ctx.devices_info.default(mode);
     }
 
-    pub fn createPlayer(self: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
+    pub fn createPlayer(ctx: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
         const context_options = js.createMap();
         defer context_options.deinit();
         context_options.set("sampleRate", js.createNumber(options.sample_rate));
@@ -83,10 +83,10 @@ pub const Context = struct {
             js.createNumber(device.channels.len),
         }).view(.object);
 
-        var player = try self.allocator.create(Player);
-        errdefer self.allocator.destroy(player);
+        var player = try ctx.allocator.create(Player);
+        errdefer ctx.allocator.destroy(player);
 
-        var captures = try self.allocator.alloc(js.Value, 1);
+        var captures = try ctx.allocator.alloc(js.Value, 1);
         captures[0] = js.createNumber(@intFromPtr(player));
 
         const document = js.global().get("document").view(.object);
@@ -101,13 +101,13 @@ pub const Context = struct {
         process_node.set("onaudioprocess", audio_process_event.toValue());
 
         player.* = .{
-            .allocator = self.allocator,
+            .allocator = ctx.allocator,
             .audio_context = audio_context,
             .process_node = process_node,
             .gain_node = gain_node,
             .process_captures = captures,
             .resume_on_click = resume_on_click,
-            .buf = try self.allocator.alloc(u8, channel_size_bytes * device.channels.len),
+            .buf = try ctx.allocator.alloc(u8, channel_size_bytes * device.channels.len),
             .buf_js = js.constructType("Uint8Array", &.{js.createNumber(channel_size_bytes)}),
             .is_paused = false,
             .writeFn = writeFn,
@@ -125,11 +125,11 @@ pub const Context = struct {
         return .{ .webaudio = player };
     }
 
-    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
+    pub fn createRecorder(ctx: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
         _ = readFn;
-        var recorder = try self.allocator.create(Recorder);
+        var recorder = try ctx.allocator.create(Recorder);
         recorder.* = .{
-            .allocator = self.allocator,
+            .allocator = ctx.allocator,
             .is_paused = false,
             .vol = 1.0,
             .channels = device.channels,
@@ -159,51 +159,51 @@ pub const Player = struct {
     sample_rate: u24,
     write_step: u8,
 
-    pub fn deinit(self: *Player) void {
-        self.resume_on_click.deinit();
-        self.buf_js.deinit();
-        self.gain_node.deinit();
-        self.process_node.deinit();
-        self.audio_context.deinit();
-        self.allocator.free(self.process_captures);
-        self.allocator.free(self.buf);
-        self.allocator.destroy(self);
+    pub fn deinit(player: *Player) void {
+        player.resume_on_click.deinit();
+        player.buf_js.deinit();
+        player.gain_node.deinit();
+        player.process_node.deinit();
+        player.audio_context.deinit();
+        player.allocator.free(player.process_captures);
+        player.allocator.free(player.buf);
+        player.allocator.destroy(player);
     }
 
-    pub fn start(self: *Player) !void {
-        const destination = self.audio_context.get("destination").view(.object);
+    pub fn start(player: *Player) !void {
+        const destination = player.audio_context.get("destination").view(.object);
         defer destination.deinit();
-        _ = self.gain_node.call("connect", &.{destination.toValue()});
-        _ = self.process_node.call("connect", &.{self.gain_node.toValue()});
+        _ = player.gain_node.call("connect", &.{destination.toValue()});
+        _ = player.process_node.call("connect", &.{player.gain_node.toValue()});
     }
 
     fn resumeOnClick(args: js.Object, _: usize, captures: []js.Value) js.Value {
-        const self = @as(*Player, @ptrFromInt(@as(usize, @intFromFloat(captures[0].view(.num)))));
-        self.play() catch {};
+        const player = @as(*Player, @ptrFromInt(@as(usize, @intFromFloat(captures[0].view(.num)))));
+        player.play() catch {};
 
         const document = js.global().get("document").view(.object);
         defer document.deinit();
 
         const event = args.getIndex(0).view(.object);
         defer event.deinit();
-        _ = document.call("removeEventListener", &.{ event.toValue(), self.resume_on_click.toValue() });
+        _ = document.call("removeEventListener", &.{ event.toValue(), player.resume_on_click.toValue() });
 
         return js.createUndefined();
     }
 
     fn audioProcessEvent(args: js.Object, _: usize, captures: []js.Value) js.Value {
-        const self = @as(*Player, @ptrFromInt(@as(usize, @intFromFloat(captures[0].view(.num)))));
+        const player = @as(*Player, @ptrFromInt(@as(usize, @intFromFloat(captures[0].view(.num)))));
 
         const event = args.getIndex(0).view(.object);
         defer event.deinit();
         const output_buffer = event.get("outputBuffer").view(.object);
         defer output_buffer.deinit();
 
-        self.writeFn(self.user_data, channel_size);
+        player.writeFn(player.user_data, channel_size);
 
-        for (self.channels, 0..) |_, i| {
-            self.buf_js.copyBytes(self.buf[i * channel_size_bytes .. (i + 1) * channel_size_bytes]);
-            const buf_f32_js = js.constructType("Float32Array", &.{ self.buf_js.get("buffer"), self.buf_js.get("byteOffset"), js.createNumber(channel_size) });
+        for (player.channels, 0..) |_, i| {
+            player.buf_js.copyBytes(player.buf[i * channel_size_bytes .. (i + 1) * channel_size_bytes]);
+            const buf_f32_js = js.constructType("Float32Array", &.{ player.buf_js.get("buffer"), player.buf_js.get("byteOffset"), js.createNumber(channel_size) });
             defer buf_f32_js.deinit();
             _ = output_buffer.call("copyToChannel", &.{ buf_f32_js.toValue(), js.createNumber(i) });
         }
@@ -211,28 +211,28 @@ pub const Player = struct {
         return js.createUndefined();
     }
 
-    pub fn play(self: *Player) !void {
-        _ = self.audio_context.call("resume", &.{js.createUndefined()});
-        self.is_paused = false;
+    pub fn play(player: *Player) !void {
+        _ = player.audio_context.call("resume", &.{js.createUndefined()});
+        player.is_paused = false;
     }
 
-    pub fn pause(self: *Player) !void {
-        _ = self.audio_context.call("suspend", &.{js.createUndefined()});
-        self.is_paused = true;
+    pub fn pause(player: *Player) !void {
+        _ = player.audio_context.call("suspend", &.{js.createUndefined()});
+        player.is_paused = true;
     }
 
-    pub fn paused(self: *Player) bool {
-        return self.is_paused;
+    pub fn paused(player: *Player) bool {
+        return player.is_paused;
     }
 
-    pub fn setVolume(self: *Player, vol: f32) !void {
-        const gain = self.gain_node.get("gain").view(.object);
+    pub fn setVolume(player: *Player, vol: f32) !void {
+        const gain = player.gain_node.get("gain").view(.object);
         defer gain.deinit();
         gain.set("value", js.createNumber(vol));
     }
 
-    pub fn volume(self: *Player) !f32 {
-        const gain = self.gain_node.get("gain").view(.object);
+    pub fn volume(player: *Player) !f32 {
+        const gain = player.gain_node.get("gain").view(.object);
         defer gain.deinit();
         return @as(f32, @floatCast(gain.get("value").view(.num)));
     }
@@ -248,32 +248,32 @@ pub const Recorder = struct {
     sample_rate: u24,
     read_step: u8,
 
-    pub fn deinit(self: *Recorder) void {
-        self.allocator.destroy(self);
+    pub fn deinit(recorder: *Recorder) void {
+        recorder.allocator.destroy(recorder);
     }
 
-    pub fn start(self: *Recorder) !void {
-        _ = self;
+    pub fn start(recorder: *Recorder) !void {
+        _ = recorder;
     }
 
-    pub fn record(self: *Recorder) !void {
-        self.is_paused = false;
+    pub fn record(recorder: *Recorder) !void {
+        recorder.is_paused = false;
     }
 
-    pub fn pause(self: *Recorder) !void {
-        self.is_paused = true;
+    pub fn pause(recorder: *Recorder) !void {
+        recorder.is_paused = true;
     }
 
-    pub fn paused(self: *Recorder) bool {
-        return self.is_paused;
+    pub fn paused(recorder: *Recorder) bool {
+        return recorder.is_paused;
     }
 
-    pub fn setVolume(self: *Recorder, vol: f32) !void {
-        self.vol = vol;
+    pub fn setVolume(recorder: *Recorder, vol: f32) !void {
+        recorder.vol = vol;
     }
 
-    pub fn volume(self: *Recorder) !f32 {
-        return self.vol;
+    pub fn volume(recorder: *Recorder) !f32 {
+        return recorder.vol;
     }
 };
 

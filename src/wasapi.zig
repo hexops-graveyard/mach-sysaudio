@@ -31,9 +31,9 @@ pub const Context = struct {
             else => unreachable,
         }
 
-        var self = try allocator.create(Context);
-        errdefer allocator.destroy(self);
-        self.* = .{
+        var ctx = try allocator.create(Context);
+        errdefer allocator.destroy(ctx);
+        ctx.* = .{
             .allocator = allocator,
             .devices_info = util.DevicesInfo.init(),
             .enumerator = blk: {
@@ -85,7 +85,7 @@ pub const Context = struct {
         };
 
         if (options.deviceChangeFn) |_| {
-            hr = self.enumerator.?.RegisterEndpointNotificationCallback(&self.watcher.?.notif_client);
+            hr = ctx.enumerator.?.RegisterEndpointNotificationCallback(&ctx.watcher.?.notif_client);
             switch (hr) {
                 win32.S_OK => {},
                 win32.E_POINTER => unreachable,
@@ -94,13 +94,13 @@ pub const Context = struct {
             }
         }
 
-        return .{ .wasapi = self };
+        return .{ .wasapi = ctx };
     }
 
-    fn queryInterfaceCB(self: *const win32.IUnknown, riid: ?*const win32.Guid, ppv: ?*?*anyopaque) callconv(std.os.windows.WINAPI) win32.HRESULT {
+    fn queryInterfaceCB(ctx: *const win32.IUnknown, riid: ?*const win32.Guid, ppv: ?*?*anyopaque) callconv(std.os.windows.WINAPI) win32.HRESULT {
         if (riid.?.eql(win32.IID_IUnknown.*) or riid.?.eql(win32.IID_IMMNotificationClient.*)) {
-            ppv.?.* = @as(?*anyopaque, @ptrFromInt(@intFromPtr(self)));
-            _ = self.AddRef();
+            ppv.?.* = @as(?*anyopaque, @ptrFromInt(@intFromPtr(ctx)));
+            _ = ctx.AddRef();
             return win32.S_OK;
         } else {
             ppv.?.* = null;
@@ -116,55 +116,55 @@ pub const Context = struct {
         return 1;
     }
 
-    fn onDeviceStateChangedCB(self: *const win32.IMMNotificationClient, _: ?[*:0]const u16, _: u32) callconv(std.os.windows.WINAPI) win32.HRESULT {
-        var watcher = @fieldParentPtr(Watcher, "notif_client", self);
+    fn onDeviceStateChangedCB(ctx: *const win32.IMMNotificationClient, _: ?[*:0]const u16, _: u32) callconv(std.os.windows.WINAPI) win32.HRESULT {
+        var watcher = @fieldParentPtr(Watcher, "notif_client", ctx);
         watcher.deviceChangeFn(watcher.user_data);
         return win32.S_OK;
     }
 
-    fn onDeviceAddedCB(self: *const win32.IMMNotificationClient, _: ?[*:0]const u16) callconv(std.os.windows.WINAPI) win32.HRESULT {
-        var watcher = @fieldParentPtr(Watcher, "notif_client", self);
+    fn onDeviceAddedCB(ctx: *const win32.IMMNotificationClient, _: ?[*:0]const u16) callconv(std.os.windows.WINAPI) win32.HRESULT {
+        var watcher = @fieldParentPtr(Watcher, "notif_client", ctx);
         watcher.deviceChangeFn(watcher.user_data);
         return win32.S_OK;
     }
 
-    fn onDeviceRemovedCB(self: *const win32.IMMNotificationClient, _: ?[*:0]const u16) callconv(std.os.windows.WINAPI) win32.HRESULT {
-        var watcher = @fieldParentPtr(Watcher, "notif_client", self);
+    fn onDeviceRemovedCB(ctx: *const win32.IMMNotificationClient, _: ?[*:0]const u16) callconv(std.os.windows.WINAPI) win32.HRESULT {
+        var watcher = @fieldParentPtr(Watcher, "notif_client", ctx);
         watcher.deviceChangeFn(watcher.user_data);
         return win32.S_OK;
     }
 
-    fn onDefaultDeviceChangedCB(self: *const win32.IMMNotificationClient, _: win32.DataFlow, _: win32.Role, _: ?[*:0]const u16) callconv(std.os.windows.WINAPI) win32.HRESULT {
-        var watcher = @fieldParentPtr(Watcher, "notif_client", self);
+    fn onDefaultDeviceChangedCB(ctx: *const win32.IMMNotificationClient, _: win32.DataFlow, _: win32.Role, _: ?[*:0]const u16) callconv(std.os.windows.WINAPI) win32.HRESULT {
+        var watcher = @fieldParentPtr(Watcher, "notif_client", ctx);
         watcher.deviceChangeFn(watcher.user_data);
         return win32.S_OK;
     }
 
-    fn onPropertyValueChangedCB(self: *const win32.IMMNotificationClient, _: ?[*:0]const u16, _: win32.PROPERTYKEY) callconv(std.os.windows.WINAPI) win32.HRESULT {
-        var watcher = @fieldParentPtr(Watcher, "notif_client", self);
+    fn onPropertyValueChangedCB(ctx: *const win32.IMMNotificationClient, _: ?[*:0]const u16, _: win32.PROPERTYKEY) callconv(std.os.windows.WINAPI) win32.HRESULT {
+        var watcher = @fieldParentPtr(Watcher, "notif_client", ctx);
         watcher.deviceChangeFn(watcher.user_data);
         return win32.S_OK;
     }
 
-    pub fn deinit(self: *Context) void {
-        if (self.watcher) |*watcher| {
-            _ = self.enumerator.?.UnregisterEndpointNotificationCallback(&watcher.notif_client);
+    pub fn deinit(ctx: *Context) void {
+        if (ctx.watcher) |*watcher| {
+            _ = ctx.enumerator.?.UnregisterEndpointNotificationCallback(&watcher.notif_client);
         }
-        _ = self.enumerator.?.Release();
-        for (self.devices_info.list.items) |d|
-            freeDevice(self.allocator, d);
-        self.devices_info.list.deinit(self.allocator);
-        self.allocator.destroy(self);
+        _ = ctx.enumerator.?.Release();
+        for (ctx.devices_info.list.items) |d|
+            freeDevice(ctx.allocator, d);
+        ctx.devices_info.list.deinit(ctx.allocator);
+        ctx.allocator.destroy(ctx);
     }
 
-    pub fn refresh(self: *Context) !void {
+    pub fn refresh(ctx: *Context) !void {
         // get default devices id
-        const default_playback_id = try self.getDefaultAudioEndpoint(.playback);
-        const default_capture_id = try self.getDefaultAudioEndpoint(.capture);
+        const default_playback_id = try ctx.getDefaultAudioEndpoint(.playback);
+        const default_capture_id = try ctx.getDefaultAudioEndpoint(.capture);
 
         // enumerate
         var collection: ?*win32.IMMDeviceCollection = null;
-        var hr = self.enumerator.?.EnumAudioEndpoints(
+        var hr = ctx.enumerator.?.EnumAudioEndpoints(
             win32.DataFlow.all,
             win32.DEVICE_STATE_ACTIVE,
             &collection,
@@ -248,7 +248,7 @@ pub const Context = struct {
                     };
                 },
                 .channels = blk: {
-                    var chn_arr = std.ArrayList(main.Channel).init(self.allocator);
+                    var chn_arr = std.ArrayList(main.Channel).init(ctx.allocator);
                     var channel: u32 = win32.SPEAKER_FRONT_LEFT;
                     while (channel < win32.SPEAKER_ALL) : (channel <<= 1) {
                         if (wf.dwChannelMask & channel != 0)
@@ -273,7 +273,7 @@ pub const Context = struct {
                         else => return error.OpeningDevice,
                     }
 
-                    var fmt_arr = std.ArrayList(main.Format).init(self.allocator);
+                    var fmt_arr = std.ArrayList(main.Format).init(ctx.allocator);
                     var closest_match: ?*win32.WAVEFORMATEX = null;
                     for (std.meta.tags(main.Format)) |format| {
                         setWaveFormatFormat(wf, format);
@@ -299,7 +299,7 @@ pub const Context = struct {
                     }
                     defer win32.CoTaskMemFree(id_u16);
 
-                    break :blk std.unicode.utf16leToUtf8AllocZ(self.allocator, std.mem.span(id_u16.?)) catch |err| switch (err) {
+                    break :blk std.unicode.utf16leToUtf8AllocZ(ctx.allocator, std.mem.span(id_u16.?)) catch |err| switch (err) {
                         error.OutOfMemory => return error.OutOfMemory,
                         else => unreachable,
                     };
@@ -313,7 +313,7 @@ pub const Context = struct {
                     defer win32.CoTaskMemFree(variant.anon.anon.anon.pwszVal);
 
                     break :blk std.unicode.utf16leToUtf8AllocZ(
-                        self.allocator,
+                        ctx.allocator,
                         std.mem.span(variant.anon.anon.anon.pwszVal.?),
                     ) catch |err| switch (err) {
                         error.OutOfMemory => return error.OutOfMemory,
@@ -322,28 +322,28 @@ pub const Context = struct {
                 },
             };
 
-            try self.devices_info.list.append(self.allocator, device);
+            try ctx.devices_info.list.append(ctx.allocator, device);
             switch (device.mode) {
                 .playback => if (default_playback_id) |id| {
                     if (std.mem.eql(u8, device.id, id)) {
-                        self.devices_info.setDefault(.playback, self.devices_info.list.items.len - 1);
+                        ctx.devices_info.setDefault(.playback, ctx.devices_info.list.items.len - 1);
                     }
                 },
                 .capture => if (default_capture_id) |id| {
                     if (std.mem.eql(u8, device.id, id)) {
-                        self.devices_info.setDefault(.capture, self.devices_info.list.items.len - 1);
+                        ctx.devices_info.setDefault(.capture, ctx.devices_info.list.items.len - 1);
                     }
                 },
             }
         }
     }
 
-    pub fn devices(self: Context) []const main.Device {
-        return self.devices_info.list.items;
+    pub fn devices(ctx: Context) []const main.Device {
+        return ctx.devices_info.list.items;
     }
 
-    pub fn defaultDevice(self: Context, mode: main.Device.Mode) ?main.Device {
-        return self.devices_info.default(mode);
+    pub fn defaultDevice(ctx: Context, mode: main.Device.Mode) ?main.Device {
+        return ctx.devices_info.default(mode);
     }
 
     fn fromWASApiChannel(speaker: u32) main.Channel.Id {
@@ -383,9 +383,9 @@ pub const Context = struct {
         wf.Samples.wValidBitsPerSample = format.validSizeBits();
     }
 
-    fn getDefaultAudioEndpoint(self: *Context, mode: main.Device.Mode) !?[:0]u8 {
+    fn getDefaultAudioEndpoint(ctx: *Context, mode: main.Device.Mode) !?[:0]u8 {
         var default_playback_device: ?*win32.IMMDevice = null;
-        var hr = self.enumerator.?.GetDefaultAudioEndpoint(
+        var hr = ctx.enumerator.?.GetDefaultAudioEndpoint(
             if (mode == .playback) .render else .capture,
             if (mode == .playback) .console else .communications,
             &default_playback_device,
@@ -410,14 +410,14 @@ pub const Context = struct {
             else => return error.OpeningDevice,
         }
 
-        return std.unicode.utf16leToUtf8AllocZ(self.allocator, std.mem.span(default_playback_id_u16.?)) catch |err| switch (err) {
+        return std.unicode.utf16leToUtf8AllocZ(ctx.allocator, std.mem.span(default_playback_id_u16.?)) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             else => unreachable,
         };
     }
 
     fn createAudioClient(
-        self: *Context,
+        ctx: *Context,
         device: main.Device,
         format: main.Format,
         sample_rate: u24,
@@ -426,12 +426,12 @@ pub const Context = struct {
         audio_client3: *?*win32.IAudioClient3,
         max_buffer_frames: *u32,
     ) !void {
-        var id_u16 = std.unicode.utf8ToUtf16LeWithNull(self.allocator, device.id) catch |err| switch (err) {
+        var id_u16 = std.unicode.utf8ToUtf16LeWithNull(ctx.allocator, device.id) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             else => unreachable,
         };
-        defer self.allocator.free(id_u16);
-        var hr = self.enumerator.?.GetDevice(id_u16, imm_device);
+        defer ctx.allocator.free(id_u16);
+        var hr = ctx.enumerator.?.GetDevice(id_u16, imm_device);
         switch (hr) {
             win32.S_OK => {},
             win32.E_POINTER => unreachable,
@@ -478,7 +478,7 @@ pub const Context = struct {
             .SubFormat = toSubFormat(format),
         };
 
-        if (!self.is_wine and audio_client3.* != null) {
+        if (!ctx.is_wine and audio_client3.* != null) {
             hr = audio_client3.*.?.InitializeSharedAudioStream(
                 win32.AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
                 0, // TODO: use the advantage of AudioClient3
@@ -574,7 +574,7 @@ pub const Context = struct {
         }
     }
 
-    pub fn createPlayer(self: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
+    pub fn createPlayer(ctx: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
         const format = device.preferredFormat(options.format);
         const sample_rate = device.sample_rate.min;
 
@@ -582,7 +582,7 @@ pub const Context = struct {
         var audio_client: ?*win32.IAudioClient = null;
         var audio_client3: ?*win32.IAudioClient3 = null;
         var max_buffer_frames: u32 = 0;
-        try self.createAudioClient(device, format, sample_rate, &imm_device, &audio_client, &audio_client3, &max_buffer_frames);
+        try ctx.createAudioClient(device, format, sample_rate, &imm_device, &audio_client, &audio_client3, &max_buffer_frames);
 
         var render_client: ?*win32.IAudioRenderClient = null;
         var hr = audio_client.?.GetService(win32.IID_IAudioRenderClient, @as(?*?*anyopaque, @ptrCast(&render_client)));
@@ -600,9 +600,9 @@ pub const Context = struct {
         const simple_volume = try createSimpleVolume(audio_client);
         const ready_event = try createEvent(audio_client);
 
-        var player = try self.allocator.create(Player);
+        var player = try ctx.allocator.create(Player);
         player.* = .{
-            .allocator = self.allocator,
+            .allocator = ctx.allocator,
             .thread = undefined,
             .audio_client = audio_client,
             .audio_client3 = audio_client3,
@@ -623,7 +623,7 @@ pub const Context = struct {
         return .{ .wasapi = player };
     }
 
-    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
+    pub fn createRecorder(ctx: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
         const format = device.preferredFormat(options.format);
         const sample_rate = device.sample_rate.min;
 
@@ -631,7 +631,7 @@ pub const Context = struct {
         var audio_client: ?*win32.IAudioClient = null;
         var audio_client3: ?*win32.IAudioClient3 = null;
         var max_buffer_frames: u32 = 0;
-        try self.createAudioClient(device, format, sample_rate, &imm_device, &audio_client, &audio_client3, &max_buffer_frames);
+        try ctx.createAudioClient(device, format, sample_rate, &imm_device, &audio_client, &audio_client3, &max_buffer_frames);
 
         var capture_client: ?*win32.IAudioCaptureClient = null;
         var hr = audio_client.?.GetService(win32.IID_IAudioCaptureClient, @as(?*?*anyopaque, @ptrCast(&capture_client)));
@@ -649,9 +649,9 @@ pub const Context = struct {
         const simple_volume = try createSimpleVolume(audio_client);
         const ready_event = try createEvent(audio_client);
 
-        var recorder = try self.allocator.create(Recorder);
+        var recorder = try ctx.allocator.create(Recorder);
         recorder.* = .{
-            .allocator = self.allocator,
+            .allocator = ctx.allocator,
             .thread = undefined,
             .audio_client = audio_client,
             .audio_client3 = audio_client3,
@@ -732,19 +732,19 @@ pub const Player = struct {
     sample_rate: u24,
     write_step: u8,
 
-    pub fn deinit(self: *Player) void {
-        self.aborted.store(true, .Unordered);
-        self.thread.join();
-        _ = self.simple_volume.?.Release();
-        _ = self.render_client.?.Release();
-        _ = self.audio_client.?.Release();
-        _ = self.audio_client3.?.Release();
-        _ = self.imm_device.?.Release();
-        self.allocator.destroy(self);
+    pub fn deinit(player: *Player) void {
+        player.aborted.store(true, .Unordered);
+        player.thread.join();
+        _ = player.simple_volume.?.Release();
+        _ = player.render_client.?.Release();
+        _ = player.audio_client.?.Release();
+        _ = player.audio_client3.?.Release();
+        _ = player.imm_device.?.Release();
+        player.allocator.destroy(player);
     }
 
-    pub fn start(self: *Player) !void {
-        self.thread = std.Thread.spawn(.{}, writeThread, .{self}) catch |err| switch (err) {
+    pub fn start(player: *Player) !void {
+        player.thread = std.Thread.spawn(.{}, writeThread, .{player}) catch |err| switch (err) {
             error.ThreadQuotaExceeded,
             error.SystemResources,
             error.LockedMemoryLimitExceeded,
@@ -754,8 +754,8 @@ pub const Player = struct {
         };
     }
 
-    fn writeThread(self: *Player) void {
-        var hr = self.audio_client.?.Start();
+    fn writeThread(player: *Player) void {
+        var hr = player.audio_client.?.Start();
         switch (hr) {
             win32.S_OK => {},
             win32.AUDCLNT_E_NOT_INITIALIZED => unreachable,
@@ -766,11 +766,11 @@ pub const Player = struct {
             else => unreachable,
         }
 
-        while (!self.aborted.load(.Unordered)) {
-            _ = win32.WaitForSingleObject(self.ready_event, win32.INFINITE);
+        while (!player.aborted.load(.Unordered)) {
+            _ = win32.WaitForSingleObject(player.ready_event, win32.INFINITE);
 
             var padding_frames: u32 = 0;
-            hr = self.audio_client.?.GetCurrentPadding(&padding_frames);
+            hr = player.audio_client.?.GetCurrentPadding(&padding_frames);
             switch (hr) {
                 win32.S_OK => {},
                 win32.E_POINTER => unreachable,
@@ -780,10 +780,10 @@ pub const Player = struct {
                 else => unreachable,
             }
 
-            const frames = self.max_buffer_frames - padding_frames;
+            const frames = player.max_buffer_frames - padding_frames;
             if (frames > 0) {
                 var data: [*]u8 = undefined;
-                hr = self.render_client.?.GetBuffer(frames, @as(?*?*u8, @ptrCast(&data)));
+                hr = player.render_client.?.GetBuffer(frames, @as(?*?*u8, @ptrCast(&data)));
                 switch (hr) {
                     win32.S_OK => {},
                     win32.E_POINTER => unreachable,
@@ -797,13 +797,13 @@ pub const Player = struct {
                     else => unreachable,
                 }
 
-                for (self.channels, 0..) |*ch, i| {
-                    ch.*.ptr = data + self.format.frameSize(i);
+                for (player.channels, 0..) |*ch, i| {
+                    ch.*.ptr = data + player.format.frameSize(i);
                 }
 
-                self.writeFn(self.user_data, frames);
+                player.writeFn(player.user_data, frames);
 
-                hr = self.render_client.?.ReleaseBuffer(frames, 0);
+                hr = player.render_client.?.ReleaseBuffer(frames, 0);
                 switch (hr) {
                     win32.S_OK => {},
                     win32.E_INVALIDARG => unreachable,
@@ -818,9 +818,9 @@ pub const Player = struct {
         }
     }
 
-    pub fn play(self: *Player) !void {
-        if (self.paused()) {
-            const hr = self.audio_client.?.Start();
+    pub fn play(player: *Player) !void {
+        if (player.paused()) {
+            const hr = player.audio_client.?.Start();
             switch (hr) {
                 win32.S_OK => {},
                 win32.AUDCLNT_E_NOT_INITIALIZED => unreachable,
@@ -830,29 +830,29 @@ pub const Player = struct {
                 win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return error.CannotPlay,
                 else => unreachable,
             }
-            self.is_paused = false;
+            player.is_paused = false;
         }
     }
 
-    pub fn pause(self: *Player) !void {
-        if (!self.paused()) {
-            const hr = self.audio_client.?.Stop();
+    pub fn pause(player: *Player) !void {
+        if (!player.paused()) {
+            const hr = player.audio_client.?.Stop();
             switch (hr) {
                 win32.S_OK => {},
                 win32.AUDCLNT_E_DEVICE_INVALIDATED => return error.CannotPause,
                 win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return error.CannotPause,
                 else => unreachable,
             }
-            self.is_paused = true;
+            player.is_paused = true;
         }
     }
 
-    pub fn paused(self: *Player) bool {
-        return self.is_paused;
+    pub fn paused(player: *Player) bool {
+        return player.is_paused;
     }
 
-    pub fn setVolume(self: *Player, vol: f32) !void {
-        const hr = self.simple_volume.?.SetMasterVolume(vol, null);
+    pub fn setVolume(player: *Player, vol: f32) !void {
+        const hr = player.simple_volume.?.SetMasterVolume(vol, null);
         switch (hr) {
             win32.S_OK => {},
             win32.E_INVALIDARG => unreachable,
@@ -862,9 +862,9 @@ pub const Player = struct {
         }
     }
 
-    pub fn volume(self: *Player) !f32 {
+    pub fn volume(player: *Player) !f32 {
         var vol: f32 = 0;
-        const hr = self.simple_volume.?.GetMasterVolume(&vol);
+        const hr = player.simple_volume.?.GetMasterVolume(&vol);
         switch (hr) {
             win32.S_OK => {},
             win32.E_POINTER => unreachable,
@@ -896,19 +896,19 @@ pub const Recorder = struct {
     sample_rate: u24,
     read_step: u8,
 
-    pub fn deinit(self: *Recorder) void {
-        self.aborted.store(true, .Unordered);
-        self.thread.join();
-        _ = self.simple_volume.?.Release();
-        _ = self.capture_client.?.Release();
-        _ = self.audio_client.?.Release();
-        _ = self.audio_client3.?.Release();
-        _ = self.imm_device.?.Release();
-        self.allocator.destroy(self);
+    pub fn deinit(recorder: *Recorder) void {
+        recorder.aborted.store(true, .Unordered);
+        recorder.thread.join();
+        _ = recorder.simple_volume.?.Release();
+        _ = recorder.capture_client.?.Release();
+        _ = recorder.audio_client.?.Release();
+        _ = recorder.audio_client3.?.Release();
+        _ = recorder.imm_device.?.Release();
+        recorder.allocator.destroy(recorder);
     }
 
-    pub fn start(self: *Recorder) !void {
-        self.thread = std.Thread.spawn(.{}, readThread, .{self}) catch |err| switch (err) {
+    pub fn start(recorder: *Recorder) !void {
+        recorder.thread = std.Thread.spawn(.{}, readThread, .{recorder}) catch |err| switch (err) {
             error.ThreadQuotaExceeded,
             error.SystemResources,
             error.LockedMemoryLimitExceeded,
@@ -918,8 +918,8 @@ pub const Recorder = struct {
         };
     }
 
-    fn readThread(self: *Recorder) void {
-        var hr = self.audio_client.?.Start();
+    fn readThread(recorder: *Recorder) void {
+        var hr = recorder.audio_client.?.Start();
         switch (hr) {
             win32.S_OK => {},
             win32.AUDCLNT_E_NOT_INITIALIZED => unreachable,
@@ -930,11 +930,11 @@ pub const Recorder = struct {
             else => unreachable,
         }
 
-        while (!self.aborted.load(.Unordered)) {
-            _ = win32.WaitForSingleObject(self.ready_event, win32.INFINITE);
+        while (!recorder.aborted.load(.Unordered)) {
+            _ = win32.WaitForSingleObject(recorder.ready_event, win32.INFINITE);
 
             var padding_frames: u32 = 0;
-            hr = self.audio_client.?.GetCurrentPadding(&padding_frames);
+            hr = recorder.audio_client.?.GetCurrentPadding(&padding_frames);
             switch (hr) {
                 win32.S_OK => {},
                 win32.E_POINTER => unreachable,
@@ -944,11 +944,11 @@ pub const Recorder = struct {
                 else => unreachable,
             }
 
-            var frames = self.max_buffer_frames - padding_frames;
+            var frames = recorder.max_buffer_frames - padding_frames;
             if (frames > 0) {
                 var data: [*]u8 = undefined;
                 var flags: u32 = 0;
-                hr = self.capture_client.?.GetBuffer(@as(?*?*u8, @ptrCast(&data)), &frames, &flags, null, null);
+                hr = recorder.capture_client.?.GetBuffer(@as(?*?*u8, @ptrCast(&data)), &frames, &flags, null, null);
                 switch (hr) {
                     win32.S_OK => {},
                     win32.E_POINTER => unreachable,
@@ -962,13 +962,13 @@ pub const Recorder = struct {
                     else => unreachable,
                 }
 
-                for (self.channels, 0..) |*ch, i| {
-                    ch.*.ptr = data + self.format.frameSize(i);
+                for (recorder.channels, 0..) |*ch, i| {
+                    ch.*.ptr = data + recorder.format.frameSize(i);
                 }
 
-                self.readFn(self.user_data, frames);
+                recorder.readFn(recorder.user_data, frames);
 
-                hr = self.capture_client.?.ReleaseBuffer(frames);
+                hr = recorder.capture_client.?.ReleaseBuffer(frames);
                 switch (hr) {
                     win32.S_OK => {},
                     win32.E_INVALIDARG => unreachable,
@@ -983,9 +983,9 @@ pub const Recorder = struct {
         }
     }
 
-    pub fn record(self: *Recorder) !void {
-        if (self.paused()) {
-            const hr = self.audio_client.?.Start();
+    pub fn record(recorder: *Recorder) !void {
+        if (recorder.paused()) {
+            const hr = recorder.audio_client.?.Start();
             switch (hr) {
                 win32.S_OK => {},
                 win32.AUDCLNT_E_NOT_INITIALIZED => unreachable,
@@ -995,29 +995,29 @@ pub const Recorder = struct {
                 win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return error.CannotRecord,
                 else => unreachable,
             }
-            self.is_paused = false;
+            recorder.is_paused = false;
         }
     }
 
-    pub fn pause(self: *Recorder) !void {
-        if (!self.paused()) {
-            const hr = self.audio_client.?.Stop();
+    pub fn pause(recorder: *Recorder) !void {
+        if (!recorder.paused()) {
+            const hr = recorder.audio_client.?.Stop();
             switch (hr) {
                 win32.S_OK => {},
                 win32.AUDCLNT_E_DEVICE_INVALIDATED => return error.CannotPause,
                 win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return error.CannotPause,
                 else => unreachable,
             }
-            self.is_paused = true;
+            recorder.is_paused = true;
         }
     }
 
-    pub fn paused(self: *Recorder) bool {
-        return self.is_paused;
+    pub fn paused(recorder: *Recorder) bool {
+        return recorder.is_paused;
     }
 
-    pub fn setVolume(self: *Recorder, vol: f32) !void {
-        const hr = self.simple_volume.?.SetMasterVolume(vol, null);
+    pub fn setVolume(recorder: *Recorder, vol: f32) !void {
+        const hr = recorder.simple_volume.?.SetMasterVolume(vol, null);
         switch (hr) {
             win32.S_OK => {},
             win32.E_INVALIDARG => unreachable,
@@ -1027,9 +1027,9 @@ pub const Recorder = struct {
         }
     }
 
-    pub fn volume(self: *Recorder) !f32 {
+    pub fn volume(recorder: *Recorder) !f32 {
         var vol: f32 = 0;
-        const hr = self.simple_volume.?.GetMasterVolume(&vol);
+        const hr = recorder.simple_volume.?.GetMasterVolume(&vol);
         switch (hr) {
             win32.S_OK => {},
             win32.E_POINTER => unreachable,
@@ -1041,11 +1041,11 @@ pub const Recorder = struct {
     }
 };
 
-pub fn freeDevice(allocator: std.mem.Allocator, self: main.Device) void {
-    allocator.free(self.id);
-    allocator.free(self.name);
-    allocator.free(self.formats);
-    allocator.free(self.channels);
+pub fn freeDevice(allocator: std.mem.Allocator, device: main.Device) void {
+    allocator.free(device.id);
+    allocator.free(device.name);
+    allocator.free(device.formats);
+    allocator.free(device.channels);
 }
 
 test {
