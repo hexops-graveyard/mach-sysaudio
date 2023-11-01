@@ -747,6 +747,6 @@ fn createStreamDesc(format: main.Format, sample_rate: u24, ch_count: usize) !c.A
     return desc;
 }
 
-test {
+test "reference declarations" {
     std.testing.refAllDeclsRecursive(@This());
 }

@@ -842,6 +842,6 @@ pub fn toCHMAP(pos: main.Channel.Id) c_uint {
     };
 }
 
-test {
+test "reference declarations" {
     std.testing.refAllDeclsRecursive(@This());
 }
