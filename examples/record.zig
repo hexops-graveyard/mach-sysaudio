@@ -54,7 +54,7 @@ fn readCallback(_: ?*anyopaque, frames: usize) void {
     var bw = std.io.bufferedWriter(file.writer());
     for (0..frames) |fi| {
         for (recorder.channels()) |ch| {
-            const sample = recorder.read(ch, fi, f32);
+            const sample = recorder.readAuto(ch, fi, f32);
             const sample_bytes: [4]u8 = @bitCast(sample);
             _ = bw.write(&sample_bytes) catch {};
         }

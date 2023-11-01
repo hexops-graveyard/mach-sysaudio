@@ -55,7 +55,7 @@ fn writeCallback(_: ?*anyopaque, frames: usize) void {
     const seconds_per_frame = 1.0 / @as(f32, @floatFromInt(player.sampleRate()));
     for (0..frames) |fi| {
         const sample = std.math.sin((seconds_offset + @as(f32, @floatFromInt(fi)) * seconds_per_frame) * radians_per_second);
-        player.writeAll(fi, sample);
+        player.writeAllAuto(fi, sample);
     }
     seconds_offset = @mod(seconds_offset + seconds_per_frame * @as(f32, @floatFromInt(frames)), 1.0);
 }

@@ -832,6 +832,6 @@ fn toPAChannelPos(channel_id: main.Channel.Id) !c.pa_channel_position_t {
     };
 }
 
-test {
+test "reference declarations" {
     std.testing.refAllDeclsRecursive(@This());
 }
