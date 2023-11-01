@@ -240,41 +240,11 @@ pub const Player = struct {
 
         const ptr = channel.ptr + frame * player.writeStep();
         switch (player.format()) {
-            .u8 => bytesAsValue(u8, ptr[0..@sizeOf(u8)]).* = switch (T) {
-                u8 => sample,
-                i8, i16, i24, i32 => signedToUnsigned(u8, sample),
-                f32 => floatToUnsigned(u8, sample),
-                else => unreachable,
-            },
-            .i16 => bytesAsValue(i16, ptr[0..@sizeOf(i16)]).* = switch (T) {
-                i16 => sample,
-                u8 => unsignedToSigned(i16, sample),
-                // i8, i24, i32 => signedToSigned(i16, sample),
-                f32 => floatToSigned(i16, sample),
-                else => unreachable,
-            },
-            .i24 => bytesAsValue(i24, ptr[0..@sizeOf(i24)]).* = switch (T) {
-                i24 => sample,
-                u8 => unsignedToSigned(i24, sample),
-                i8, i16, i32 => signedToSigned(i24, sample),
-                // TODO: uncomment once https://github.com/ziglang/zig/issues/16390 resolved
-                // f32 => floatToSigned(i24, sample),
-                else => unreachable,
-            },
-            .i24_4b => @panic("TODO"),
-            .i32 => bytesAsValue(i32, ptr[0..@sizeOf(i32)]).* = switch (T) {
-                i32 => sample,
-                u8 => unsignedToSigned(i32, sample),
-                // i8, i16, i24 => signedToSigned(i32, sample),
-                f32 => floatToSigned(i32, sample),
-                else => unreachable,
-            },
-            .f32 => bytesAsValue(f32, ptr[0..@sizeOf(f32)]).* = switch (T) {
-                f32 => sample,
-                u8 => unsignedToFloat(f32, sample),
-                i8, i16, i24, i32 => signedToFloat(f32, sample),
-                else => unreachable,
-            },
+            .u8 => bytesAsValue(u8, ptr[0..@sizeOf(u8)]).* = convertSample(.clip, u8, sample),
+            .i16 => bytesAsValue(i16, ptr[0..@sizeOf(i16)]).* = convertSample(.clip, i16, sample),
+            .i24, .i24_4b => bytesAsValue(i24, ptr[0..@sizeOf(i24)]).* = convertSample(.clip, i24, sample),
+            .i32 => bytesAsValue(i32, ptr[0..@sizeOf(i32)]).* = convertSample(.clip, i32, sample),
+            .f32 => bytesAsValue(f32, ptr[0..@sizeOf(f32)]).* = convertSample(.clip, f32, sample),
         }
     }
 
@@ -409,59 +379,13 @@ pub const Recorder = struct {
         }
 
         const ptr = channel.ptr + frame * recorder.readStep();
-        switch (recorder.format()) {
-            .u8 => {
-                const sample = bytesAsValue(u8, ptr[0..@sizeOf(u8)]).*;
-                return switch (T) {
-                    u8 => sample,
-                    i8, i16, i24, i32 => unsignedToSigned(T, sample),
-                    f32 => unsignedToFloat(T, sample),
-                    else => unreachable,
-                };
-            },
-            .i16 => {
-                const sample = bytesAsValue(i16, ptr[0..@sizeOf(i16)]).*;
-                return switch (T) {
-                    i16 => sample,
-                    u8 => signedToUnsigned(T, sample),
-                    i8, i24, i32 => signedToSigned(T, sample),
-                    f32 => signedToFloat(T, sample),
-                    else => unreachable,
-                };
-            },
-            .i24 => {
-                const sample = bytesAsValue(i24, ptr[0..@sizeOf(i24)]).*;
-                return switch (T) {
-                    i24 => sample,
-                    u8 => signedToUnsigned(T, sample),
-                    i8, i16, i32 => signedToSigned(T, sample),
-                    // f32 => signedToFloat(T, sample),
-                    else => unreachable,
-                };
-            },
-            .i24_4b => @panic("TODO"),
-            .i32 => {
-                const sample = bytesAsValue(i32, ptr[0..@sizeOf(i32)]).*;
-                return switch (T) {
-                    i32 => sample,
-                    u8 => signedToUnsigned(T, sample),
-                    i8, i16, i24 => signedToSigned(T, sample),
-                    f32 => signedToFloat(T, sample),
-                    else => unreachable,
-                };
-            },
-            .f32 => {
-                const sample = bytesAsValue(f32, ptr[0..@sizeOf(f32)]).*;
-                return switch (T) {
-                    f32 => sample,
-                    u8 => floatToUnsigned(T, sample),
-                    i8, i16, i32 => floatToSigned(T, sample),
-                    // TODO: uncomment once https://github.com/ziglang/zig/issues/16390 resolved
-                    // i24 => floatToSigned(T, sample),
-                    else => unreachable,
-                };
-            },
-        }
+        return switch (recorder.format()) {
+            .u8 => convertSample(.clip, T, bytesAsValue(u8, ptr[0..@sizeOf(u8)]).*),
+            .i16 => convertSample(.clip, T, bytesAsValue(i16, ptr[0..@sizeOf(i16)]).*),
+            .i24, .i24_4b => convertSample(.clip, T, bytesAsValue(i24, ptr[0..@sizeOf(i24)]).*),
+            .i32 => convertSample(.clip, T, bytesAsValue(i32, ptr[0..@sizeOf(i32)]).*),
+            .f32 => convertSample(.clip, T, bytesAsValue(f32, ptr[0..@sizeOf(f32)]).*),
+        };
     }
 
     pub inline fn sampleRate(recorder: *Recorder) u24 {
@@ -492,6 +416,76 @@ pub const Recorder = struct {
     }
 };
 
+pub const FloatConvertionStrategy = enum { clip, dither };
+
+inline fn convertSample(comptime strategy: FloatConvertionStrategy, comptime T: type, sample: anytype) T {
+    const ST = @TypeOf(sample);
+    return switch (ST) {
+        u8 => switch (T) {
+            u8 => sample,
+            i8, i16, i24, i32 => unsignedToSigned(T, sample),
+            f32 => unsignedToFloat(T, sample),
+            else => unreachable,
+        },
+        i16 => switch (T) {
+            i16 => sample,
+            u8 => signedToUnsigned(T, sample),
+            i8, i24, i32 => signedToSigned(T, sample),
+            f32 => signedToFloat(T, sample),
+            else => unreachable,
+        },
+        i24 => switch (T) {
+            i24 => sample,
+            u8 => signedToUnsigned(T, sample),
+            i8, i16, i32 => signedToSigned(T, sample),
+            f32 => signedToFloat(T, sample),
+            else => unreachable,
+        },
+        i32 => switch (T) {
+            i32 => sample,
+            u8 => signedToUnsigned(T, sample),
+            i8, i16, i24 => signedToSigned(T, sample),
+            f32 => signedToFloat(T, sample),
+            else => unreachable,
+        },
+        f32 => switch (T) {
+            f32 => sample,
+            u8 => switch (strategy) {
+                .clip => floatToUnsignedClip(T, sample),
+                .dither => @compileError("TODO"),
+            },
+            i8, i16, i24, i32 => switch (strategy) {
+                .clip => floatToSignedClip(T, sample),
+                .dither => @compileError("TODO"),
+            },
+            else => unreachable,
+        },
+        else => @compileError("invalid type"),
+    };
+}
+
+test convertSample {
+    try std.testing.expectEqual(@as(i16, -31488), convertSample(.clip, i16, @as(u8, 5)));
+    try std.testing.expectEqual(@as(i24, -8060928), convertSample(.clip, i24, @as(u8, 5)));
+    try std.testing.expectEqual(@as(i32, -2063597568), convertSample(.clip, i32, @as(u8, 5)));
+    try std.testing.expectEqual(@as(f32, -0.9609375), convertSample(.clip, f32, @as(u8, 5)));
+
+    try std.testing.expectEqual(@as(u8, 128), convertSample(.clip, u8, @as(i16, 5)));
+    try std.testing.expectEqual(@as(i24, 1280), convertSample(.clip, i24, @as(i16, 5)));
+    try std.testing.expectEqual(@as(i32, 327680), convertSample(.clip, i32, @as(i16, 5)));
+    try std.testing.expectEqual(@as(f32, 1.52587890625e-4), convertSample(.clip, f32, @as(i16, 5)));
+
+    try std.testing.expectEqual(@as(u8, 128), convertSample(.clip, u8, @as(i24, 5)));
+    try std.testing.expectEqual(@as(i16, 0), convertSample(.clip, i16, @as(i24, 5)));
+    try std.testing.expectEqual(@as(i32, 1280), convertSample(.clip, i32, @as(i24, 5)));
+    try std.testing.expectEqual(@as(f32, 5.9604644775391e-7), convertSample(.clip, f32, @as(i24, 5)));
+
+    try std.testing.expectEqual(@as(u8, 191), convertSample(.clip, u8, @as(f32, 0.5)));
+    try std.testing.expectEqual(@as(i16, 16383), convertSample(.clip, i16, @as(f32, 0.5)));
+    try std.testing.expectEqual(@as(i24, 4194303), convertSample(.clip, i24, @as(f32, 0.5)));
+    try std.testing.expectEqual(@as(i32, 1073741824), convertSample(.clip, i32, @as(f32, 0.5)));
+}
+
 inline fn unsignedToSigned(comptime T: type, sample: anytype) T {
     const half = 1 << (@bitSizeOf(@TypeOf(sample)) - 1);
     const trunc = @bitSizeOf(T) - @bitSizeOf(@TypeOf(sample));
@@ -499,8 +493,8 @@ inline fn unsignedToSigned(comptime T: type, sample: anytype) T {
 }
 
 inline fn unsignedToFloat(comptime T: type, sample: anytype) T {
-    const max_int = std.math.maxInt(@TypeOf(sample)) + 1.0;
-    return (@as(T, @floatFromInt(sample)) - max_int) * 1.0 / max_int;
+    const half = (1 << @typeInfo(@TypeOf(sample)).Int.bits) / 2;
+    return (@as(T, @floatFromInt(sample)) - half) * 1.0 / half;
 }
 
 inline fn signedToSigned(comptime T: type, sample: anytype) T {
@@ -509,23 +503,24 @@ inline fn signedToSigned(comptime T: type, sample: anytype) T {
 }
 
 inline fn signedToUnsigned(comptime T: type, sample: anytype) T {
-    const half = 1 << (@bitSizeOf(T) - 1);
+    const half = 1 << @bitSizeOf(T) - 1;
     const trunc = @bitSizeOf(@TypeOf(sample)) - @bitSizeOf(T);
     return @intCast((sample >> trunc) + half);
 }
 
 inline fn signedToFloat(comptime T: type, sample: anytype) T {
-    const max_int = std.math.maxInt(@TypeOf(sample)) + 1.0;
-    return @as(T, @floatFromInt(sample)) * 1.0 / max_int;
+    const max: f32 = std.math.maxInt(@TypeOf(sample)) + 1;
+    return @as(T, @floatFromInt(sample)) * (1.0 / max);
 }
 
-inline fn floatToSigned(comptime T: type, sample: f64) T {
-    return @intFromFloat(sample * std.math.maxInt(T));
+inline fn floatToSignedClip(comptime T: type, sample: f32) T {
+    const max = std.math.maxInt(T);
+    return @truncate(@as(i32, @intFromFloat(sample * max)));
 }
 
-inline fn floatToUnsigned(comptime T: type, sample: f64) T {
-    const half = 1 << @bitSizeOf(T) - 1;
-    return @intFromFloat(sample * (half - 1) + half);
+inline fn floatToUnsignedClip(comptime T: type, sample: f32) T {
+    const half = std.math.maxInt(T) / 2;
+    return @intFromFloat(std.math.clamp((sample * half) + (half + 1), 0, std.math.maxInt(T)));
 }
 
 pub const Device = struct {
