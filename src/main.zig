@@ -10,7 +10,7 @@ pub const min_sample_rate = 8_000; // Hz
 pub const max_sample_rate = 5_644_800; // Hz
 
 pub const Context = struct {
-    pub const DeviceChangeFn = *const fn (self: ?*anyopaque) void;
+    pub const DeviceChangeFn = *const fn (userdata: ?*anyopaque) void;
     pub const Options = struct {
         app_name: [:0]const u8 = "Mach Game",
         deviceChangeFn: ?DeviceChangeFn = null,
@@ -52,8 +52,8 @@ pub const Context = struct {
         return .{ .data = data };
     }
 
-    pub fn deinit(self: Context) void {
-        switch (self.data) {
+    pub fn deinit(ctx: Context) void {
+        switch (ctx.data) {
             inline else => |b| b.deinit(),
         }
     }
@@ -64,20 +64,20 @@ pub const Context = struct {
         OpeningDevice,
     };
 
-    pub fn refresh(self: Context) RefreshError!void {
-        return switch (self.data) {
+    pub fn refresh(ctx: Context) RefreshError!void {
+        return switch (ctx.data) {
             inline else => |b| b.refresh(),
         };
     }
 
-    pub fn devices(self: Context) []const Device {
-        return switch (self.data) {
+    pub fn devices(ctx: Context) []const Device {
+        return switch (ctx.data) {
             inline else => |b| b.devices(),
         };
     }
 
-    pub fn defaultDevice(self: Context, mode: Device.Mode) ?Device {
-        return switch (self.data) {
+    pub fn defaultDevice(ctx: Context, mode: Device.Mode) ?Device {
+        return switch (ctx.data) {
             inline else => |b| b.defaultDevice(mode),
         };
     }
@@ -89,21 +89,21 @@ pub const Context = struct {
         IncompatibleDevice,
     };
 
-    pub fn createPlayer(self: Context, device: Device, writeFn: WriteFn, options: StreamOptions) CreateStreamError!Player {
+    pub fn createPlayer(ctx: Context, device: Device, writeFn: WriteFn, options: StreamOptions) CreateStreamError!Player {
         std.debug.assert(device.mode == .playback);
 
         return .{
-            .data = switch (self.data) {
+            .data = switch (ctx.data) {
                 inline else => |b| try b.createPlayer(device, writeFn, options),
             },
         };
     }
 
-    pub fn createRecorder(self: Context, device: Device, readFn: ReadFn, options: StreamOptions) CreateStreamError!Recorder {
+    pub fn createRecorder(ctx: Context, device: Device, readFn: ReadFn, options: StreamOptions) CreateStreamError!Recorder {
         std.debug.assert(device.mode == .capture);
 
         return .{
-            .data = switch (self.data) {
+            .data = switch (ctx.data) {
                 inline else => |b| try b.createRecorder(device, readFn, options),
             },
         };
@@ -134,8 +134,8 @@ pub const ReadFn = *const fn (user_data: ?*anyopaque, frame_count_max: usize) vo
 pub const Player = struct {
     data: backends.Player,
 
-    pub fn deinit(self: *Player) void {
-        return switch (self.data) {
+    pub fn deinit(player: *Player) void {
+        return switch (player.data) {
             inline else => |b| b.deinit(),
         };
     }
@@ -146,8 +146,8 @@ pub const Player = struct {
         SystemResources,
     };
 
-    pub fn start(self: *Player) StartError!void {
-        return switch (self.data) {
+    pub fn start(player: *Player) StartError!void {
+        return switch (player.data) {
             inline else => |b| b.start(),
         };
     }
@@ -157,8 +157,8 @@ pub const Player = struct {
         OutOfMemory,
     };
 
-    pub fn play(self: *Player) PlayError!void {
-        return switch (self.data) {
+    pub fn play(player: *Player) PlayError!void {
+        return switch (player.data) {
             inline else => |b| b.play(),
         };
     }
@@ -168,14 +168,14 @@ pub const Player = struct {
         OutOfMemory,
     };
 
-    pub fn pause(self: *Player) PauseError!void {
-        return switch (self.data) {
+    pub fn pause(player: *Player) PauseError!void {
+        return switch (player.data) {
             inline else => |b| b.pause(),
         };
     }
 
-    pub fn paused(self: *Player) bool {
-        return switch (self.data) {
+    pub fn paused(player: *Player) bool {
+        return switch (player.data) {
             inline else => |b| b.paused(),
         };
     }
@@ -185,9 +185,9 @@ pub const Player = struct {
     };
 
     // confidence interval (±) depends on the device
-    pub fn setVolume(self: *Player, vol: f32) SetVolumeError!void {
+    pub fn setVolume(player: *Player, vol: f32) SetVolumeError!void {
         std.debug.assert(vol <= 1.0);
-        return switch (self.data) {
+        return switch (player.data) {
             inline else => |b| b.setVolume(vol),
         };
     }
@@ -197,18 +197,18 @@ pub const Player = struct {
     };
 
     // confidence interval (±) depends on the device
-    pub fn volume(self: *Player) GetVolumeError!f32 {
-        return switch (self.data) {
+    pub fn volume(player: *Player) GetVolumeError!f32 {
+        return switch (player.data) {
             inline else => |b| b.volume(),
         };
     }
 
-    pub fn writeAll(self: *Player, frame: usize, value: anytype) void {
-        for (self.channels()) |ch|
-            self.write(ch, frame, value);
+    pub fn writeAll(player: *Player, frame: usize, value: anytype) void {
+        for (player.channels()) |ch|
+            player.write(ch, frame, value);
     }
 
-    pub fn write(self: *Player, channel: Channel, frame: usize, sample: anytype) void {
+    pub fn write(player: *Player, channel: Channel, frame: usize, sample: anytype) void {
         switch (@TypeOf(sample)) {
             u8, i8, i16, i24, i32, f32 => {},
             else => @compileError(
@@ -217,8 +217,8 @@ pub const Player = struct {
             ),
         }
 
-        var ptr = channel.ptr + frame * self.writeStep();
-        switch (self.format()) {
+        var ptr = channel.ptr + frame * player.writeStep();
+        switch (player.format()) {
             .u8 => std.mem.bytesAsValue(u8, ptr[0..@sizeOf(u8)]).* = switch (@TypeOf(sample)) {
                 u8 => sample,
                 i8, i16, i24, i32 => signedToUnsigned(u8, sample),
@@ -257,29 +257,29 @@ pub const Player = struct {
         }
     }
 
-    pub fn sampleRate(self: *Player) u24 {
-        return if (@hasField(Backend, "jack")) switch (self.data) {
+    pub fn sampleRate(player: *Player) u24 {
+        return if (@hasField(Backend, "jack")) switch (player.data) {
             .jack => |b| b.sampleRate(),
             inline else => |b| b.sample_rate,
-        } else switch (self.data) {
+        } else switch (player.data) {
             inline else => |b| b.sample_rate,
         };
     }
 
-    pub fn channels(self: *Player) []Channel {
-        return switch (self.data) {
+    pub fn channels(player: *Player) []Channel {
+        return switch (player.data) {
             inline else => |b| b.channels,
         };
     }
 
-    pub fn format(self: *Player) Format {
-        return switch (self.data) {
+    pub fn format(player: *Player) Format {
+        return switch (player.data) {
             inline else => |b| b.format,
         };
     }
 
-    pub fn writeStep(self: *Player) u8 {
-        return switch (self.data) {
+    pub fn writeStep(player: *Player) u8 {
+        return switch (player.data) {
             inline else => |b| b.write_step,
         };
     }
@@ -288,8 +288,8 @@ pub const Player = struct {
 pub const Recorder = struct {
     data: backends.Recorder,
 
-    pub fn deinit(self: *Recorder) void {
-        return switch (self.data) {
+    pub fn deinit(recorder: *Recorder) void {
+        return switch (recorder.data) {
             inline else => |b| b.deinit(),
         };
     }
@@ -300,8 +300,8 @@ pub const Recorder = struct {
         SystemResources,
     };
 
-    pub fn start(self: *Recorder) StartError!void {
-        return switch (self.data) {
+    pub fn start(recorder: *Recorder) StartError!void {
+        return switch (recorder.data) {
             inline else => |b| b.start(),
         };
     }
@@ -311,8 +311,8 @@ pub const Recorder = struct {
         OutOfMemory,
     };
 
-    pub fn record(self: *Recorder) RecordError!void {
-        return switch (self.data) {
+    pub fn record(recorder: *Recorder) RecordError!void {
+        return switch (recorder.data) {
             inline else => |b| b.record(),
         };
     }
@@ -322,14 +322,14 @@ pub const Recorder = struct {
         OutOfMemory,
     };
 
-    pub fn pause(self: *Recorder) PauseError!void {
-        return switch (self.data) {
+    pub fn pause(recorder: *Recorder) PauseError!void {
+        return switch (recorder.data) {
             inline else => |b| b.pause(),
         };
     }
 
-    pub fn paused(self: *Recorder) bool {
-        return switch (self.data) {
+    pub fn paused(recorder: *Recorder) bool {
+        return switch (recorder.data) {
             inline else => |b| b.paused(),
         };
     }
@@ -339,9 +339,9 @@ pub const Recorder = struct {
     };
 
     // confidence interval (±) depends on the device
-    pub fn setVolume(self: *Recorder, vol: f32) SetVolumeError!void {
+    pub fn setVolume(recorder: *Recorder, vol: f32) SetVolumeError!void {
         std.debug.assert(vol <= 1.0);
-        return switch (self.data) {
+        return switch (recorder.data) {
             inline else => |b| b.setVolume(vol),
         };
     }
@@ -351,18 +351,18 @@ pub const Recorder = struct {
     };
 
     // confidence interval (±) depends on the device
-    pub fn volume(self: *Recorder) GetVolumeError!f32 {
-        return switch (self.data) {
+    pub fn volume(recorder: *Recorder) GetVolumeError!f32 {
+        return switch (recorder.data) {
             inline else => |b| b.volume(),
         };
     }
 
-    pub fn readAll(self: *Recorder, frame: usize, comptime T: type, samples: []T) void {
-        for (self.channels(), samples) |ch, *sample|
-            sample.* = self.read(ch, frame, T);
+    pub fn readAll(recorder: *Recorder, frame: usize, comptime T: type, samples: []T) void {
+        for (recorder.channels(), samples) |ch, *sample|
+            sample.* = recorder.read(ch, frame, T);
     }
 
-    pub fn read(self: *Recorder, channel: Channel, frame: usize, comptime T: type) T {
+    pub fn read(recorder: *Recorder, channel: Channel, frame: usize, comptime T: type) T {
         switch (T) {
             u8, i8, i16, i24, i32, f32 => {},
             else => @compileError(
@@ -371,8 +371,8 @@ pub const Recorder = struct {
             ),
         }
 
-        var ptr = channel.ptr + frame * self.readStep();
-        switch (self.format()) {
+        var ptr = channel.ptr + frame * recorder.readStep();
+        switch (recorder.format()) {
             .u8 => {
                 const sample = std.mem.bytesAsValue(u8, ptr[0..@sizeOf(u8)]).*;
                 return switch (T) {
@@ -427,29 +427,29 @@ pub const Recorder = struct {
         }
     }
 
-    pub fn sampleRate(self: *Recorder) u24 {
-        return if (@hasField(Backend, "jack")) switch (self.data) {
+    pub fn sampleRate(recorder: *Recorder) u24 {
+        return if (@hasField(Backend, "jack")) switch (recorder.data) {
             .jack => |b| b.sampleRate(),
             inline else => |b| b.sample_rate,
-        } else switch (self.data) {
+        } else switch (recorder.data) {
             inline else => |b| b.sample_rate,
         };
     }
 
-    pub fn channels(self: *Recorder) []Channel {
-        return switch (self.data) {
+    pub fn channels(recorder: *Recorder) []Channel {
+        return switch (recorder.data) {
             inline else => |b| b.channels,
         };
     }
 
-    pub fn format(self: *Recorder) Format {
-        return switch (self.data) {
+    pub fn format(recorder: *Recorder) Format {
+        return switch (recorder.data) {
             inline else => |b| b.format,
         };
     }
 
-    pub fn readStep(self: *Recorder) u8 {
-        return switch (self.data) {
+    pub fn readStep(recorder: *Recorder) u8 {
+        return switch (recorder.data) {
             inline else => |b| b.read_step,
         };
     }
@@ -504,17 +504,17 @@ pub const Device = struct {
         capture,
     };
 
-    pub fn preferredFormat(self: Device, format: ?Format) Format {
+    pub fn preferredFormat(device: Device, format: ?Format) Format {
         if (format) |f| {
-            for (self.formats) |fmt| {
+            for (device.formats) |fmt| {
                 if (f == fmt) {
                     return fmt;
                 }
             }
         }
 
-        var best: Format = self.formats[0];
-        for (self.formats) |fmt| {
+        var best: Format = device.formats[0];
+        for (device.formats) |fmt| {
             if (fmt.size() >= best.size()) {
                 if (fmt == .i24_4b and best == .i24)
                     continue;
@@ -559,8 +559,8 @@ pub const Format = enum {
     i32,
     f32,
 
-    pub fn size(self: Format) u8 {
-        return switch (self) {
+    pub fn size(format: Format) u8 {
+        return switch (format) {
             .u8 => 1,
             .i16 => 2,
             .i24 => 3,
@@ -568,8 +568,8 @@ pub const Format = enum {
         };
     }
 
-    pub fn validSize(self: Format) u8 {
-        return switch (self) {
+    pub fn validSize(format: Format) u8 {
+        return switch (format) {
             .u8 => 1,
             .i16 => 2,
             .i24, .i24_4b => 3,
@@ -577,16 +577,16 @@ pub const Format = enum {
         };
     }
 
-    pub fn sizeBits(self: Format) u8 {
-        return self.size() * 8;
+    pub fn sizeBits(format: Format) u8 {
+        return format.size() * 8;
     }
 
-    pub fn validSizeBits(self: Format) u8 {
-        return self.validSize() * 8;
+    pub fn validSizeBits(format: Format) u8 {
+        return format.validSize() * 8;
     }
 
-    pub fn frameSize(self: Format, ch_count: usize) u8 {
-        return self.size() * @as(u5, @intCast(ch_count));
+    pub fn frameSize(format: Format, ch_count: usize) u8 {
+        return format.size() * @as(u5, @intCast(ch_count));
     }
 };
 

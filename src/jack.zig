@@ -60,9 +60,9 @@ pub const Context = struct {
         lib.jack_set_info_function(@as(?*const fn ([*c]const u8) callconv(.C) void, @ptrCast(&util.doNothing)));
 
         var status: c.jack_status_t = 0;
-        var self = try allocator.create(Context);
-        errdefer allocator.destroy(self);
-        self.* = .{
+        var ctx = try allocator.create(Context);
+        errdefer allocator.destroy(ctx);
+        ctx.* = .{
             .allocator = allocator,
             .devices_info = util.DevicesInfo.init(),
             .client = lib.jack_client_open(options.app_name.ptr, c.JackNoStartServer, &status) orelse {
@@ -79,38 +79,38 @@ pub const Context = struct {
         };
 
         if (options.deviceChangeFn) |_| {
-            if (lib.jack_set_sample_rate_callback(self.client, sampleRateCallback, self) != 0 or
-                lib.jack_set_port_registration_callback(self.client, portRegistrationCallback, self) != 0 or
-                lib.jack_set_port_rename_callback(self.client, portRenameCalllback, self) != 0)
+            if (lib.jack_set_sample_rate_callback(ctx.client, sampleRateCallback, ctx) != 0 or
+                lib.jack_set_port_registration_callback(ctx.client, portRegistrationCallback, ctx) != 0 or
+                lib.jack_set_port_rename_callback(ctx.client, portRenameCalllback, ctx) != 0)
                 return error.ConnectionRefused;
         }
 
-        return .{ .jack = self };
+        return .{ .jack = ctx };
     }
 
-    pub fn deinit(self: *Context) void {
-        for (self.devices_info.list.items) |device|
-            freeDevice(self.allocator, device);
-        self.devices_info.list.deinit(self.allocator);
-        _ = lib.jack_client_close(self.client);
-        self.allocator.destroy(self);
+    pub fn deinit(ctx: *Context) void {
+        for (ctx.devices_info.list.items) |device|
+            freeDevice(ctx.allocator, device);
+        ctx.devices_info.list.deinit(ctx.allocator);
+        _ = lib.jack_client_close(ctx.client);
+        ctx.allocator.destroy(ctx);
         lib.handle.close();
     }
 
-    pub fn refresh(self: *Context) !void {
-        for (self.devices_info.list.items) |d|
-            freeDevice(self.allocator, d);
-        self.devices_info.clear();
+    pub fn refresh(ctx: *Context) !void {
+        for (ctx.devices_info.list.items) |d|
+            freeDevice(ctx.allocator, d);
+        ctx.devices_info.clear();
 
-        const sample_rate = @as(u24, @intCast(lib.jack_get_sample_rate(self.client)));
+        const sample_rate = @as(u24, @intCast(lib.jack_get_sample_rate(ctx.client)));
 
-        const port_names = lib.jack_get_ports(self.client, null, null, 0) orelse
+        const port_names = lib.jack_get_ports(ctx.client, null, null, 0) orelse
             return error.OutOfMemory;
         defer lib.jack_free(@as(?*anyopaque, @ptrCast(port_names)));
 
         var i: usize = 0;
         outer: while (port_names[i] != null) : (i += 1) {
-            const port = lib.jack_port_by_name(self.client, port_names[i]) orelse break;
+            const port = lib.jack_port_by_name(ctx.client, port_names[i]) orelse break;
             const port_type = lib.jack_port_type(port)[0..@as(usize, @intCast(lib.jack_port_type_size()))];
             if (!std.mem.startsWith(u8, port_type, c.JACK_DEFAULT_AUDIO_TYPE))
                 continue;
@@ -121,23 +121,23 @@ pub const Context = struct {
             const name = std.mem.span(port_names[i]);
             const id = std.mem.sliceTo(name, ':');
 
-            for (self.devices_info.list.items) |*dev| {
+            for (ctx.devices_info.list.items) |*dev| {
                 if (std.mem.eql(u8, dev.id, id) and mode == dev.mode) {
                     const new_ch = main.Channel{
                         .id = @as(main.Channel.Id, @enumFromInt(dev.channels.len)),
                     };
-                    dev.channels = try self.allocator.realloc(dev.channels, dev.channels.len + 1);
+                    dev.channels = try ctx.allocator.realloc(dev.channels, dev.channels.len + 1);
                     dev.channels[dev.channels.len - 1] = new_ch;
                     break :outer;
                 }
             }
 
             var device = main.Device{
-                .id = try self.allocator.dupeZ(u8, id),
+                .id = try ctx.allocator.dupeZ(u8, id),
                 .name = name,
                 .mode = mode,
                 .channels = blk: {
-                    var channels = try self.allocator.alloc(main.Channel, 1);
+                    var channels = try ctx.allocator.alloc(main.Channel, 1);
                     channels[0] = .{ .id = @as(main.Channel.Id, @enumFromInt(0)) };
                     break :blk channels;
                 },
@@ -148,53 +148,53 @@ pub const Context = struct {
                 },
             };
 
-            try self.devices_info.list.append(self.allocator, device);
-            if (self.devices_info.default(mode) == null) {
-                self.devices_info.setDefault(mode, self.devices_info.list.items.len - 1);
+            try ctx.devices_info.list.append(ctx.allocator, device);
+            if (ctx.devices_info.default(mode) == null) {
+                ctx.devices_info.setDefault(mode, ctx.devices_info.list.items.len - 1);
             }
         }
     }
 
     fn sampleRateCallback(_: c.jack_nframes_t, arg: ?*anyopaque) callconv(.C) c_int {
-        var self = @as(*Context, @ptrCast(@alignCast(arg.?)));
-        self.watcher.?.deviceChangeFn(self.watcher.?.user_data);
+        var ctx = @as(*Context, @ptrCast(@alignCast(arg.?)));
+        ctx.watcher.?.deviceChangeFn(ctx.watcher.?.user_data);
         return 0;
     }
 
     fn portRegistrationCallback(_: c.jack_port_id_t, _: c_int, arg: ?*anyopaque) callconv(.C) void {
-        var self = @as(*Context, @ptrCast(@alignCast(arg.?)));
-        self.watcher.?.deviceChangeFn(self.watcher.?.user_data);
+        var ctx = @as(*Context, @ptrCast(@alignCast(arg.?)));
+        ctx.watcher.?.deviceChangeFn(ctx.watcher.?.user_data);
     }
 
     fn portRenameCalllback(_: c.jack_port_id_t, _: [*c]const u8, _: [*c]const u8, arg: ?*anyopaque) callconv(.C) void {
-        var self = @as(*Context, @ptrCast(@alignCast(arg.?)));
-        self.watcher.?.deviceChangeFn(self.watcher.?.user_data);
+        var ctx = @as(*Context, @ptrCast(@alignCast(arg.?)));
+        ctx.watcher.?.deviceChangeFn(ctx.watcher.?.user_data);
     }
 
-    pub fn devices(self: *Context) []const main.Device {
-        return self.devices_info.list.items;
+    pub fn devices(ctx: *Context) []const main.Device {
+        return ctx.devices_info.list.items;
     }
 
-    pub fn defaultDevice(self: *Context, mode: main.Device.Mode) ?main.Device {
-        return self.devices_info.default(mode);
+    pub fn defaultDevice(ctx: *Context, mode: main.Device.Mode) ?main.Device {
+        return ctx.devices_info.default(mode);
     }
 
-    pub fn createPlayer(self: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
-        var ports = try self.allocator.alloc(*c.jack_port_t, device.channels.len);
-        var dest_ports = try self.allocator.alloc([:0]const u8, ports.len);
+    pub fn createPlayer(ctx: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
+        var ports = try ctx.allocator.alloc(*c.jack_port_t, device.channels.len);
+        var dest_ports = try ctx.allocator.alloc([:0]const u8, ports.len);
         var buf: [64]u8 = undefined;
         for (device.channels, 0..) |_, i| {
             const port_name = std.fmt.bufPrintZ(&buf, "playback_{d}", .{i + 1}) catch unreachable;
-            const dest_name = try std.fmt.allocPrintZ(self.allocator, "{s}:{s}", .{ device.id, port_name });
-            ports[i] = lib.jack_port_register(self.client, port_name.ptr, c.JACK_DEFAULT_AUDIO_TYPE, c.JackPortIsOutput, 0) orelse
+            const dest_name = try std.fmt.allocPrintZ(ctx.allocator, "{s}:{s}", .{ device.id, port_name });
+            ports[i] = lib.jack_port_register(ctx.client, port_name.ptr, c.JACK_DEFAULT_AUDIO_TYPE, c.JackPortIsOutput, 0) orelse
                 return error.OpeningDevice;
             dest_ports[i] = dest_name;
         }
 
-        var player = try self.allocator.create(Player);
+        var player = try ctx.allocator.create(Player);
         player.* = .{
-            .allocator = self.allocator,
-            .client = self.client,
+            .allocator = ctx.allocator,
+            .client = ctx.client,
             .ports = ports,
             .dest_ports = dest_ports,
             .device = device,
@@ -208,22 +208,22 @@ pub const Context = struct {
         return .{ .jack = player };
     }
 
-    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
-        var ports = try self.allocator.alloc(*c.jack_port_t, device.channels.len);
-        var dest_ports = try self.allocator.alloc([:0]const u8, ports.len);
+    pub fn createRecorder(ctx: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
+        var ports = try ctx.allocator.alloc(*c.jack_port_t, device.channels.len);
+        var dest_ports = try ctx.allocator.alloc([:0]const u8, ports.len);
         var buf: [64]u8 = undefined;
         for (device.channels, 0..) |_, i| {
             const port_name = std.fmt.bufPrintZ(&buf, "capture_{d}", .{i + 1}) catch unreachable;
-            const dest_name = try std.fmt.allocPrintZ(self.allocator, "{s}:{s}", .{ device.id, port_name });
-            ports[i] = lib.jack_port_register(self.client, port_name.ptr, c.JACK_DEFAULT_AUDIO_TYPE, c.JackPortIsInput, 0) orelse
+            const dest_name = try std.fmt.allocPrintZ(ctx.allocator, "{s}:{s}", .{ device.id, port_name });
+            ports[i] = lib.jack_port_register(ctx.client, port_name.ptr, c.JACK_DEFAULT_AUDIO_TYPE, c.JackPortIsInput, 0) orelse
                 return error.OpeningDevice;
             dest_ports[i] = dest_name;
         }
 
-        var recorder = try self.allocator.create(Recorder);
+        var recorder = try ctx.allocator.create(Recorder);
         recorder.* = .{
-            .allocator = self.allocator,
-            .client = self.client,
+            .allocator = ctx.allocator,
+            .client = ctx.client,
             .ports = ports,
             .dest_ports = dest_ports,
             .device = device,
@@ -252,71 +252,71 @@ pub const Player = struct {
     format: main.Format,
     write_step: u8,
 
-    pub fn deinit(self: *Player) void {
-        self.allocator.free(self.ports);
-        for (self.dest_ports) |d|
-            self.allocator.free(d);
-        self.allocator.free(self.dest_ports);
-        _ = lib.jack_deactivate(self.client);
-        self.allocator.destroy(self);
+    pub fn deinit(player: *Player) void {
+        player.allocator.free(player.ports);
+        for (player.dest_ports) |d|
+            player.allocator.free(d);
+        player.allocator.free(player.dest_ports);
+        _ = lib.jack_deactivate(player.client);
+        player.allocator.destroy(player);
     }
 
-    pub fn start(self: *Player) !void {
-        if (lib.jack_set_process_callback(self.client, processCallback, self) != 0)
+    pub fn start(player: *Player) !void {
+        if (lib.jack_set_process_callback(player.client, processCallback, player) != 0)
             return error.CannotPlay;
 
-        if (lib.jack_activate(self.client) != 0)
+        if (lib.jack_activate(player.client) != 0)
             return error.CannotPlay;
 
-        for (self.ports, 0..) |port, i| {
-            if (lib.jack_connect(self.client, lib.jack_port_name(port), self.dest_ports[i].ptr) != 0)
+        for (player.ports, 0..) |port, i| {
+            if (lib.jack_connect(player.client, lib.jack_port_name(port), player.dest_ports[i].ptr) != 0)
                 return error.CannotPlay;
         }
     }
 
-    fn processCallback(n_frames: c.jack_nframes_t, self_opaque: ?*anyopaque) callconv(.C) c_int {
-        const self = @as(*Player, @ptrCast(@alignCast(self_opaque.?)));
+    fn processCallback(n_frames: c.jack_nframes_t, player_opaque: ?*anyopaque) callconv(.C) c_int {
+        const player = @as(*Player, @ptrCast(@alignCast(player_opaque.?)));
 
-        for (self.channels, 0..) |*ch, i| {
-            ch.*.ptr = @as([*]u8, @ptrCast(lib.jack_port_get_buffer(self.ports[i], n_frames)));
+        for (player.channels, 0..) |*ch, i| {
+            ch.*.ptr = @as([*]u8, @ptrCast(lib.jack_port_get_buffer(player.ports[i], n_frames)));
         }
-        self.writeFn(self.user_data, n_frames);
+        player.writeFn(player.user_data, n_frames);
 
         return 0;
     }
 
-    pub fn play(self: *Player) !void {
-        for (self.ports, 0..) |port, i| {
-            if (lib.jack_connect(self.client, lib.jack_port_name(port), self.dest_ports[i].ptr) != 0)
+    pub fn play(player: *Player) !void {
+        for (player.ports, 0..) |port, i| {
+            if (lib.jack_connect(player.client, lib.jack_port_name(port), player.dest_ports[i].ptr) != 0)
                 return error.CannotPlay;
         }
     }
 
-    pub fn pause(self: *Player) !void {
-        for (self.ports, 0..) |port, i| {
-            if (lib.jack_disconnect(self.client, lib.jack_port_name(port), self.dest_ports[i].ptr) != 0)
+    pub fn pause(player: *Player) !void {
+        for (player.ports, 0..) |port, i| {
+            if (lib.jack_disconnect(player.client, lib.jack_port_name(port), player.dest_ports[i].ptr) != 0)
                 return error.CannotPause;
         }
     }
 
-    pub fn paused(self: *Player) bool {
-        for (self.ports, 0..) |port, i| {
-            if (lib.jack_port_connected_to(port, self.dest_ports[i].ptr) == 1)
+    pub fn paused(player: *Player) bool {
+        for (player.ports, 0..) |port, i| {
+            if (lib.jack_port_connected_to(port, player.dest_ports[i].ptr) == 1)
                 return false;
         }
         return true;
     }
 
-    pub fn setVolume(self: *Player, vol: f32) !void {
-        self.vol = vol;
+    pub fn setVolume(player: *Player, vol: f32) !void {
+        player.vol = vol;
     }
 
-    pub fn volume(self: *Player) !f32 {
-        return self.vol;
+    pub fn volume(player: *Player) !f32 {
+        return player.vol;
     }
 
-    pub fn sampleRate(self: *Player) u24 {
-        return @as(u24, @intCast(lib.jack_get_sample_rate(self.client)));
+    pub fn sampleRate(player: *Player) u24 {
+        return @as(u24, @intCast(lib.jack_get_sample_rate(player.client)));
     }
 };
 
@@ -334,71 +334,71 @@ pub const Recorder = struct {
     format: main.Format,
     read_step: u8,
 
-    pub fn deinit(self: *Recorder) void {
-        self.allocator.free(self.ports);
-        for (self.dest_ports) |d|
-            self.allocator.free(d);
-        self.allocator.free(self.dest_ports);
-        _ = lib.jack_deactivate(self.client);
-        self.allocator.destroy(self);
+    pub fn deinit(recorder: *Recorder) void {
+        recorder.allocator.free(recorder.ports);
+        for (recorder.dest_ports) |d|
+            recorder.allocator.free(d);
+        recorder.allocator.free(recorder.dest_ports);
+        _ = lib.jack_deactivate(recorder.client);
+        recorder.allocator.destroy(recorder);
     }
 
-    pub fn start(self: *Recorder) !void {
-        if (lib.jack_set_process_callback(self.client, processCallback, self) != 0)
+    pub fn start(recorder: *Recorder) !void {
+        if (lib.jack_set_process_callback(recorder.client, processCallback, recorder) != 0)
             return error.CannotRecord;
 
-        if (lib.jack_activate(self.client) != 0)
+        if (lib.jack_activate(recorder.client) != 0)
             return error.CannotRecord;
 
-        for (self.ports, 0..) |port, i| {
-            if (lib.jack_connect(self.client, lib.jack_port_name(port), self.dest_ports[i].ptr) != 0)
+        for (recorder.ports, 0..) |port, i| {
+            if (lib.jack_connect(recorder.client, lib.jack_port_name(port), recorder.dest_ports[i].ptr) != 0)
                 return error.CannotRecord;
         }
     }
 
-    fn processCallback(n_frames: c.jack_nframes_t, self_opaque: ?*anyopaque) callconv(.C) c_int {
-        const self = @as(*Recorder, @ptrCast(@alignCast(self_opaque.?)));
+    fn processCallback(n_frames: c.jack_nframes_t, recorder_opaque: ?*anyopaque) callconv(.C) c_int {
+        const recorder = @as(*Recorder, @ptrCast(@alignCast(recorder_opaque.?)));
 
-        for (self.channels, 0..) |*ch, i| {
-            ch.*.ptr = @as([*]u8, @ptrCast(lib.jack_port_get_buffer(self.ports[i], n_frames)));
+        for (recorder.channels, 0..) |*ch, i| {
+            ch.*.ptr = @as([*]u8, @ptrCast(lib.jack_port_get_buffer(recorder.ports[i], n_frames)));
         }
-        self.readFn(self.user_data, n_frames);
+        recorder.readFn(recorder.user_data, n_frames);
 
         return 0;
     }
 
-    pub fn record(self: *Recorder) !void {
-        for (self.ports, 0..) |port, i| {
-            if (lib.jack_connect(self.client, lib.jack_port_name(port), self.dest_ports[i].ptr) != 0)
+    pub fn record(recorder: *Recorder) !void {
+        for (recorder.ports, 0..) |port, i| {
+            if (lib.jack_connect(recorder.client, lib.jack_port_name(port), recorder.dest_ports[i].ptr) != 0)
                 return error.CannotRecord;
         }
     }
 
-    pub fn pause(self: *Recorder) !void {
-        for (self.ports, 0..) |port, i| {
-            if (lib.jack_disconnect(self.client, lib.jack_port_name(port), self.dest_ports[i].ptr) != 0)
+    pub fn pause(recorder: *Recorder) !void {
+        for (recorder.ports, 0..) |port, i| {
+            if (lib.jack_disconnect(recorder.client, lib.jack_port_name(port), recorder.dest_ports[i].ptr) != 0)
                 return error.CannotPause;
         }
     }
 
-    pub fn paused(self: *Recorder) bool {
-        for (self.ports, 0..) |port, i| {
-            if (lib.jack_port_connected_to(port, self.dest_ports[i].ptr) == 1)
+    pub fn paused(recorder: *Recorder) bool {
+        for (recorder.ports, 0..) |port, i| {
+            if (lib.jack_port_connected_to(port, recorder.dest_ports[i].ptr) == 1)
                 return false;
         }
         return true;
     }
 
-    pub fn setVolume(self: *Recorder, vol: f32) !void {
-        self.vol = vol;
+    pub fn setVolume(recorder: *Recorder, vol: f32) !void {
+        recorder.vol = vol;
     }
 
-    pub fn volume(self: *Recorder) !f32 {
-        return self.vol;
+    pub fn volume(recorder: *Recorder) !f32 {
+        return recorder.vol;
     }
 
-    pub fn sampleRate(self: *Recorder) u24 {
-        return @as(u24, @intCast(lib.jack_get_sample_rate(self.client)));
+    pub fn sampleRate(recorder: *Recorder) u24 {
+        return @as(u24, @intCast(lib.jack_get_sample_rate(recorder.client)));
     }
 };
 

@@ -82,9 +82,9 @@ pub const Context = struct {
 
         lib.pw_init(null, null);
 
-        var self = try allocator.create(Context);
-        errdefer allocator.destroy(self);
-        self.* = .{
+        var ctx = try allocator.create(Context);
+        errdefer allocator.destroy(ctx);
+        ctx.* = .{
             .allocator = allocator,
             .devices_info = util.DevicesInfo.init(),
             .app_name = options.app_name,
@@ -110,47 +110,47 @@ pub const Context = struct {
             // },
         };
 
-        return .{ .pipewire = self };
+        return .{ .pipewire = ctx };
     }
 
-    pub fn deinit(self: *Context) void {
-        for (self.devices_info.list.items) |d|
-            freeDevice(self.allocator, d);
-        self.devices_info.list.deinit(self.allocator);
+    pub fn deinit(ctx: *Context) void {
+        for (ctx.devices_info.list.items) |d|
+            freeDevice(ctx.allocator, d);
+        ctx.devices_info.list.deinit(ctx.allocator);
         lib.pw_deinit();
-        self.allocator.destroy(self);
+        ctx.allocator.destroy(ctx);
         lib.handle.close();
     }
 
-    pub fn refresh(self: *Context) !void {
-        for (self.devices_info.list.items) |d|
-            freeDevice(self.allocator, d);
-        self.devices_info.clear();
+    pub fn refresh(ctx: *Context) !void {
+        for (ctx.devices_info.list.items) |d|
+            freeDevice(ctx.allocator, d);
+        ctx.devices_info.clear();
 
-        try self.devices_info.list.append(self.allocator, default_playback);
-        try self.devices_info.list.append(self.allocator, default_capture);
+        try ctx.devices_info.list.append(ctx.allocator, default_playback);
+        try ctx.devices_info.list.append(ctx.allocator, default_capture);
 
-        self.devices_info.setDefault(.playback, 0);
-        self.devices_info.setDefault(.capture, 1);
+        ctx.devices_info.setDefault(.playback, 0);
+        ctx.devices_info.setDefault(.capture, 1);
 
-        self.devices_info.list.items[0].channels = try self.allocator.alloc(main.Channel, 2);
-        self.devices_info.list.items[1].channels = try self.allocator.alloc(main.Channel, 2);
+        ctx.devices_info.list.items[0].channels = try ctx.allocator.alloc(main.Channel, 2);
+        ctx.devices_info.list.items[1].channels = try ctx.allocator.alloc(main.Channel, 2);
 
-        self.devices_info.list.items[0].channels[0] = .{ .id = .front_right };
-        self.devices_info.list.items[0].channels[1] = .{ .id = .front_left };
-        self.devices_info.list.items[1].channels[0] = .{ .id = .front_right };
-        self.devices_info.list.items[1].channels[1] = .{ .id = .front_left };
+        ctx.devices_info.list.items[0].channels[0] = .{ .id = .front_right };
+        ctx.devices_info.list.items[0].channels[1] = .{ .id = .front_left };
+        ctx.devices_info.list.items[1].channels[0] = .{ .id = .front_right };
+        ctx.devices_info.list.items[1].channels[1] = .{ .id = .front_left };
     }
 
-    pub fn devices(self: Context) []const main.Device {
-        return self.devices_info.list.items;
+    pub fn devices(ctx: Context) []const main.Device {
+        return ctx.devices_info.list.items;
     }
 
-    pub fn defaultDevice(self: Context, mode: main.Device.Mode) ?main.Device {
-        return self.devices_info.default(mode);
+    pub fn defaultDevice(ctx: Context, mode: main.Device.Mode) ?main.Device {
+        return ctx.devices_info.default(mode);
     }
 
-    pub fn createPlayer(self: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
+    pub fn createPlayer(ctx: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
         const media_role = switch (options.media_role) {
             .default => "Screen",
             .game => "Game",
@@ -173,7 +173,7 @@ pub const Context = struct {
             media_role.ptr,
 
             c.PW_KEY_MEDIA_NAME,
-            self.app_name.ptr,
+            ctx.app_name.ptr,
 
             c.PW_KEY_AUDIO_RATE,
             audio_rate.ptr,
@@ -196,8 +196,8 @@ pub const Context = struct {
             .trigger_done = null,
         };
 
-        var player = try self.allocator.create(Player);
-        errdefer self.allocator.destroy(player);
+        var player = try ctx.allocator.create(Player);
+        errdefer ctx.allocator.destroy(player);
 
         const thread = lib.pw_thread_loop_new(device.id, null) orelse return error.SystemResources;
         const stream = lib.pw_stream_new_simple(
@@ -241,7 +241,7 @@ pub const Context = struct {
         ) < 0) return error.OpeningDevice;
 
         player.* = .{
-            .allocator = self.allocator,
+            .allocator = ctx.allocator,
             .thread = thread,
             .stream = stream,
             .is_paused = .{ .value = false },
@@ -256,7 +256,7 @@ pub const Context = struct {
         return .{ .pipewire = player };
     }
 
-    pub fn createRecorder(self: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
+    pub fn createRecorder(ctx: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
         const media_role = switch (options.media_role) {
             .default => "Screen",
             .game => "Game",
@@ -279,7 +279,7 @@ pub const Context = struct {
             media_role.ptr,
 
             c.PW_KEY_MEDIA_NAME,
-            self.app_name.ptr,
+            ctx.app_name.ptr,
 
             c.PW_KEY_AUDIO_RATE,
             audio_rate.ptr,
@@ -302,8 +302,8 @@ pub const Context = struct {
             .trigger_done = null,
         };
 
-        var recorder = try self.allocator.create(Recorder);
-        errdefer self.allocator.destroy(recorder);
+        var recorder = try ctx.allocator.create(Recorder);
+        errdefer ctx.allocator.destroy(recorder);
 
         const thread = lib.pw_thread_loop_new(device.id, null) orelse return error.SystemResources;
         const stream = lib.pw_stream_new_simple(
@@ -347,7 +347,7 @@ pub const Context = struct {
         ) < 0) return error.OpeningDevice;
 
         recorder.* = .{
-            .allocator = self.allocator,
+            .allocator = ctx.allocator,
             .thread = thread,
             .stream = stream,
             .is_paused = .{ .value = false },
@@ -363,14 +363,14 @@ pub const Context = struct {
     }
 };
 
-fn stateChangedCb(self_opaque: ?*anyopaque, old_state: c.pw_stream_state, state: c.pw_stream_state, err: [*c]const u8) callconv(.C) void {
+fn stateChangedCb(player_opaque: ?*anyopaque, old_state: c.pw_stream_state, state: c.pw_stream_state, err: [*c]const u8) callconv(.C) void {
     _ = old_state;
     _ = err;
 
-    var self = @as(*Player, @ptrCast(@alignCast(self_opaque.?)));
+    var player = @as(*Player, @ptrCast(@alignCast(player_opaque.?)));
 
     if (state == c.PW_STREAM_STATE_STREAMING or state == c.PW_STREAM_STATE_ERROR) {
-        lib.pw_thread_loop_signal(self.thread, false);
+        lib.pw_thread_loop_signal(player.thread, false);
     }
 }
 
@@ -388,68 +388,68 @@ pub const Player = struct {
     sample_rate: u24,
     write_step: u8,
 
-    pub fn processCb(self_opaque: ?*anyopaque) callconv(.C) void {
-        var self = @as(*Player, @ptrCast(@alignCast(self_opaque.?)));
+    pub fn processCb(player_opaque: ?*anyopaque) callconv(.C) void {
+        var player = @as(*Player, @ptrCast(@alignCast(player_opaque.?)));
 
-        const buf = lib.pw_stream_dequeue_buffer(self.stream) orelse unreachable;
+        const buf = lib.pw_stream_dequeue_buffer(player.stream) orelse unreachable;
         if (buf.*.buffer.*.datas[0].data == null) return;
-        defer _ = lib.pw_stream_queue_buffer(self.stream, buf);
+        defer _ = lib.pw_stream_queue_buffer(player.stream, buf);
 
         buf.*.buffer.*.datas[0].chunk.*.offset = 0;
-        if (self.is_paused.load(.Unordered)) {
+        if (player.is_paused.load(.Unordered)) {
             buf.*.buffer.*.datas[0].chunk.*.stride = 0;
             buf.*.buffer.*.datas[0].chunk.*.size = 0;
             return;
         }
 
-        const stride = self.format.frameSize(self.channels.len);
+        const stride = player.format.frameSize(player.channels.len);
         const frames = @min(buf.*.requested, buf.*.buffer.*.datas[0].maxsize / stride);
         buf.*.buffer.*.datas[0].chunk.*.stride = stride;
         buf.*.buffer.*.datas[0].chunk.*.size = @intCast(frames * stride);
 
-        for (self.channels, 0..) |*ch, i| {
-            ch.ptr = @as([*]u8, @ptrCast(buf.*.buffer.*.datas[0].data.?)) + self.format.frameSize(i);
+        for (player.channels, 0..) |*ch, i| {
+            ch.ptr = @as([*]u8, @ptrCast(buf.*.buffer.*.datas[0].data.?)) + player.format.frameSize(i);
         }
-        self.writeFn(self.user_data, frames);
+        player.writeFn(player.user_data, frames);
     }
 
-    pub fn deinit(self: *Player) void {
-        lib.pw_thread_loop_stop(self.thread);
-        lib.pw_thread_loop_destroy(self.thread);
-        lib.pw_stream_destroy(self.stream);
-        self.allocator.destroy(self);
+    pub fn deinit(player: *Player) void {
+        lib.pw_thread_loop_stop(player.thread);
+        lib.pw_thread_loop_destroy(player.thread);
+        lib.pw_stream_destroy(player.stream);
+        player.allocator.destroy(player);
     }
 
-    pub fn start(self: *Player) !void {
-        if (lib.pw_thread_loop_start(self.thread) < 0) return error.SystemResources;
+    pub fn start(player: *Player) !void {
+        if (lib.pw_thread_loop_start(player.thread) < 0) return error.SystemResources;
 
-        lib.pw_thread_loop_lock(self.thread);
-        lib.pw_thread_loop_wait(self.thread);
-        lib.pw_thread_loop_unlock(self.thread);
+        lib.pw_thread_loop_lock(player.thread);
+        lib.pw_thread_loop_wait(player.thread);
+        lib.pw_thread_loop_unlock(player.thread);
 
-        if (lib.pw_stream_get_state(self.stream, null) == c.PW_STREAM_STATE_ERROR) {
+        if (lib.pw_stream_get_state(player.stream, null) == c.PW_STREAM_STATE_ERROR) {
             return error.CannotPlay;
         }
     }
 
-    pub fn play(self: *Player) !void {
-        self.is_paused.store(false, .Unordered);
+    pub fn play(player: *Player) !void {
+        player.is_paused.store(false, .Unordered);
     }
 
-    pub fn pause(self: *Player) !void {
-        self.is_paused.store(true, .Unordered);
+    pub fn pause(player: *Player) !void {
+        player.is_paused.store(true, .Unordered);
     }
 
-    pub fn paused(self: *Player) bool {
-        return self.is_paused.load(.Unordered);
+    pub fn paused(player: *Player) bool {
+        return player.is_paused.load(.Unordered);
     }
 
-    pub fn setVolume(self: *Player, vol: f32) !void {
-        self.vol = vol;
+    pub fn setVolume(player: *Player, vol: f32) !void {
+        player.vol = vol;
     }
 
-    pub fn volume(self: *Player) !f32 {
-        return self.vol;
+    pub fn volume(player: *Player) !f32 {
+        return player.vol;
     }
 };
 
@@ -467,66 +467,66 @@ pub const Recorder = struct {
     sample_rate: u24,
     read_step: u8,
 
-    pub fn processCb(self_opaque: ?*anyopaque) callconv(.C) void {
-        var self = @as(*Recorder, @ptrCast(@alignCast(self_opaque.?)));
+    pub fn processCb(recorder_opaque: ?*anyopaque) callconv(.C) void {
+        var recorder = @as(*Recorder, @ptrCast(@alignCast(recorder_opaque.?)));
 
-        const buf = lib.pw_stream_dequeue_buffer(self.stream) orelse unreachable;
+        const buf = lib.pw_stream_dequeue_buffer(recorder.stream) orelse unreachable;
         if (buf.*.buffer.*.datas[0].data == null) return;
-        defer _ = lib.pw_stream_queue_buffer(self.stream, buf);
+        defer _ = lib.pw_stream_queue_buffer(recorder.stream, buf);
 
         buf.*.buffer.*.datas[0].chunk.*.offset = 0;
-        if (self.is_paused.load(.Unordered)) {
+        if (recorder.is_paused.load(.Unordered)) {
             buf.*.buffer.*.datas[0].chunk.*.stride = 0;
             buf.*.buffer.*.datas[0].chunk.*.size = 0;
             return;
         }
 
-        for (self.channels, 0..) |*ch, i| {
-            ch.ptr = @as([*]u8, @ptrCast(buf.*.buffer.*.datas[0].data.?)) + self.format.frameSize(i);
+        for (recorder.channels, 0..) |*ch, i| {
+            ch.ptr = @as([*]u8, @ptrCast(buf.*.buffer.*.datas[0].data.?)) + recorder.format.frameSize(i);
         }
 
         const stride: u32 = @intCast(buf.*.buffer.*.datas[0].chunk.*.stride);
         const frames = buf.*.buffer.*.datas[0].chunk.*.size / stride;
-        self.readFn(self.user_data, frames);
+        recorder.readFn(recorder.user_data, frames);
     }
 
-    pub fn deinit(self: *Recorder) void {
-        lib.pw_thread_loop_stop(self.thread);
-        lib.pw_thread_loop_destroy(self.thread);
-        lib.pw_stream_destroy(self.stream);
-        self.allocator.destroy(self);
+    pub fn deinit(recorder: *Recorder) void {
+        lib.pw_thread_loop_stop(recorder.thread);
+        lib.pw_thread_loop_destroy(recorder.thread);
+        lib.pw_stream_destroy(recorder.stream);
+        recorder.allocator.destroy(recorder);
     }
 
-    pub fn start(self: *Recorder) !void {
-        if (lib.pw_thread_loop_start(self.thread) < 0) return error.SystemResources;
+    pub fn start(recorder: *Recorder) !void {
+        if (lib.pw_thread_loop_start(recorder.thread) < 0) return error.SystemResources;
 
-        lib.pw_thread_loop_lock(self.thread);
-        lib.pw_thread_loop_wait(self.thread);
-        lib.pw_thread_loop_unlock(self.thread);
+        lib.pw_thread_loop_lock(recorder.thread);
+        lib.pw_thread_loop_wait(recorder.thread);
+        lib.pw_thread_loop_unlock(recorder.thread);
 
-        if (lib.pw_stream_get_state(self.stream, null) == c.PW_STREAM_STATE_ERROR) {
+        if (lib.pw_stream_get_state(recorder.stream, null) == c.PW_STREAM_STATE_ERROR) {
             return error.CannotRecord;
         }
     }
 
-    pub fn record(self: *Recorder) !void {
-        self.is_paused.store(false, .Unordered);
+    pub fn record(recorder: *Recorder) !void {
+        recorder.is_paused.store(false, .Unordered);
     }
 
-    pub fn pause(self: *Recorder) !void {
-        self.is_paused.store(true, .Unordered);
+    pub fn pause(recorder: *Recorder) !void {
+        recorder.is_paused.store(true, .Unordered);
     }
 
-    pub fn paused(self: *Recorder) bool {
-        return self.is_paused.load(.Unordered);
+    pub fn paused(recorder: *Recorder) bool {
+        return recorder.is_paused.load(.Unordered);
     }
 
-    pub fn setVolume(self: *Recorder, vol: f32) !void {
-        self.vol = vol;
+    pub fn setVolume(recorder: *Recorder, vol: f32) !void {
+        recorder.vol = vol;
     }
 
-    pub fn volume(self: *Recorder) !f32 {
-        return self.vol;
+    pub fn volume(recorder: *Recorder) !f32 {
+        return recorder.vol;
     }
 };
 
