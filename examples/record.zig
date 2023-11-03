@@ -44,20 +44,18 @@ pub fn main() !void {
     //
     // ```
     // paplay -p --format=FLOAT32LE --rate 48000 --raw zig-out/raw_audio
-    // aplay -c 2 -f FLOAT_LE -r 48000 zig-out/raw_audio
+    // aplay -f FLOAT_LE -r 48000 zig-out/raw_audio
     // ```
 
     while (true) {}
 }
 
-fn readCallback(_: ?*anyopaque, frames: usize) void {
-    var bw = std.io.bufferedWriter(file.writer());
-    for (0..frames) |fi| {
-        for (recorder.channels()) |ch| {
-            const sample = recorder.readAuto(ch, fi, f32);
-            const sample_bytes: [4]u8 = @bitCast(sample);
-            _ = bw.write(&sample_bytes) catch {};
-        }
-    }
-    bw.flush() catch {};
+fn readCallback(_: ?*anyopaque, input: []const u8) void {
+    const format_size = recorder.format().size();
+    const frames = input.len / format_size;
+
+    var buffer: [16 * 1024]f32 = undefined;
+    recorder.read(f32, buffer[0..frames], input);
+
+    _ = file.write(std.mem.sliceAsBytes(buffer[0 .. input.len / format_size])) catch {};
 }

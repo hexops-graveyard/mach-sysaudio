@@ -262,9 +262,9 @@ pub const Context = struct {
         var device = main.Device{
             .mode = mode,
             .channels = blk: {
-                var channels = try ctx.allocator.alloc(main.Channel, info.*.channel_map.channels);
+                var channels = try ctx.allocator.alloc(main.ChannelPosition, info.*.channel_map.channels);
                 for (channels, 0..) |*ch, i|
-                    ch.*.id = fromPAChannelPos(info.*.channel_map.map[i]) catch unreachable;
+                    ch.* = fromPAChannelPos(info.*.channel_map.map[i]) catch unreachable;
                 break :blk channels;
             },
             .formats = available_formats,
@@ -350,7 +350,6 @@ pub const Context = struct {
             .channels = device.channels,
             .format = format,
             .sample_rate = sample_rate,
-            .write_step = format.frameSize(device.channels.len),
         };
         return .{ .pulseaudio = player };
     }
@@ -419,7 +418,6 @@ pub const Context = struct {
             .channels = device.channels,
             .format = format,
             .sample_rate = sample_rate,
-            .read_step = format.frameSize(device.channels.len),
         };
         return .{ .pulseaudio = recorder };
     }
@@ -464,10 +462,9 @@ pub const Player = struct {
     writeFn: main.WriteFn,
     user_data: ?*anyopaque,
 
-    channels: []main.Channel,
+    channels: []main.ChannelPosition,
     format: main.Format,
     sample_rate: u24,
-    write_step: u8,
 
     pub fn deinit(player: *Player) void {
         lib.pa_threaded_mainloop_lock(player.main_loop);
@@ -508,12 +505,7 @@ pub const Player = struct {
             return;
         }
 
-        for (player.channels, 0..) |*ch, i| {
-            ch.*.ptr = player.write_ptr + player.format.frameSize(i);
-        }
-
-        const frames = frames_left / player.format.frameSize(player.channels.len);
-        player.writeFn(player.user_data, frames);
+        player.writeFn(player.user_data, player.write_ptr[0..frames_left]);
 
         if (lib.pa_stream_write(stream, player.write_ptr, frames_left, null, 0, c.PA_SEEK_RELATIVE) != 0) {
             if (std.debug.runtime_safety) unreachable;
@@ -599,10 +591,9 @@ pub const Recorder = struct {
     readFn: main.ReadFn,
     user_data: ?*anyopaque,
 
-    channels: []main.Channel,
+    channels: []main.ChannelPosition,
     format: main.Format,
     sample_rate: u24,
-    read_step: u8,
 
     pub fn deinit(recorder: *Recorder) void {
         lib.pa_threaded_mainloop_lock(recorder.main_loop);
@@ -640,12 +631,7 @@ pub const Recorder = struct {
         if (peek_ptr) |ptr| {
             recorder.peek_ptr = @ptrCast(ptr);
 
-            for (recorder.channels, 0..) |*ch, i| {
-                ch.*.ptr = recorder.peek_ptr + recorder.peek_index + recorder.format.frameSize(i);
-            }
-
-            const frames = frames_left / recorder.format.frameSize(recorder.channels.len);
-            recorder.readFn(recorder.user_data, frames);
+            recorder.readFn(recorder.user_data, (recorder.peek_ptr + recorder.peek_index)[0..frames_left]);
             recorder.peek_index += frames_left;
         } else {
             _ = lib.pa_stream_drop(stream);
@@ -763,7 +749,7 @@ pub const available_formats = &[_]main.Format{
     .i32, .f32,
 };
 
-pub fn fromPAChannelPos(pos: c.pa_channel_position_t) !main.Channel.Id {
+pub fn fromPAChannelPos(pos: c.pa_channel_position_t) !main.ChannelPosition {
     return switch (pos) {
         c.PA_CHANNEL_POSITION_MONO => .front_center,
         c.PA_CHANNEL_POSITION_FRONT_LEFT => .front_left, // PA_CHANNEL_POSITION_LEFT
@@ -801,15 +787,15 @@ pub fn toPAFormat(format: main.Format) c.pa_sample_format_t {
     };
 }
 
-pub fn toPAChannelMap(channels: []const main.Channel) !c.pa_channel_map {
+pub fn toPAChannelMap(channels: []const main.ChannelPosition) !c.pa_channel_map {
     var channel_map: c.pa_channel_map = undefined;
     channel_map.channels = @as(u5, @intCast(channels.len));
     for (channels, 0..) |ch, i|
-        channel_map.map[i] = try toPAChannelPos(ch.id);
+        channel_map.map[i] = try toPAChannelPos(ch);
     return channel_map;
 }
 
-fn toPAChannelPos(channel_id: main.Channel.Id) !c.pa_channel_position_t {
+fn toPAChannelPos(channel_id: main.ChannelPosition) !c.pa_channel_position_t {
     return switch (channel_id) {
         .lfe => c.PA_CHANNEL_POSITION_LFE,
         .front_center => c.PA_CHANNEL_POSITION_FRONT_CENTER,

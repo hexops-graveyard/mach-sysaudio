@@ -2,7 +2,7 @@ const builtin = @import("builtin");
 const std = @import("std");
 const util = @import("util.zig");
 const backends = @import("backends.zig");
-const bytesAsValue = std.mem.bytesAsValue;
+const conv = @import("conv.zig");
 
 pub const Backend = backends.Backend;
 pub const Range = util.Range;
@@ -130,9 +130,9 @@ pub const MediaRole = enum {
 
 // TODO: `*Player` instead `*anyopaque`
 // https://github.com/ziglang/zig/issues/12325
-pub const WriteFn = *const fn (user_data: ?*anyopaque, frame_count_max: usize) void;
+pub const WriteFn = *const fn (user_data: ?*anyopaque, output: []u8) void;
 // TODO: `*Recorder` instead `*anyopaque`
-pub const ReadFn = *const fn (user_data: ?*anyopaque, frame_count_max: usize) void;
+pub const ReadFn = *const fn (user_data: ?*anyopaque, input: []const u8) void;
 
 pub const Player = struct {
     data: backends.Player,
@@ -206,48 +206,6 @@ pub const Player = struct {
         };
     }
 
-    pub inline fn writeAll(player: *Player, frame: usize, value: anytype) void {
-        for (player.channels()) |ch| player.write(ch, frame, value);
-    }
-
-    pub inline fn write(player: *Player, channel: Channel, frame: usize, sample: anytype) void {
-        const T = @TypeOf(sample);
-        switch (T) {
-            u8, i8, i16, i24, i32, f32 => {},
-            else => @compileError(
-                \\invalid sample type. supported types are:
-                \\u8, i8, i16, i24, i32, f32
-            ),
-        }
-
-        const ptr = channel.ptr + frame * player.writeStep();
-        bytesAsValue(T, ptr[0..@sizeOf(T)]).* = sample;
-    }
-
-    pub inline fn writeAllAuto(player: *Player, frame: usize, value: anytype) void {
-        for (player.channels()) |ch| player.writeAuto(ch, frame, value);
-    }
-
-    pub inline fn writeAuto(player: *Player, channel: Channel, frame: usize, sample: anytype) void {
-        const T = @TypeOf(sample);
-        switch (T) {
-            u8, i8, i16, i24, i32, f32 => {},
-            else => @compileError(
-                \\invalid sample type. supported types are:
-                \\u8, i8, i16, i24, i32, f32
-            ),
-        }
-
-        const ptr = channel.ptr + frame * player.writeStep();
-        switch (player.format()) {
-            .u8 => bytesAsValue(u8, ptr[0..@sizeOf(u8)]).* = convertSample(.clip, u8, sample),
-            .i16 => bytesAsValue(i16, ptr[0..@sizeOf(i16)]).* = convertSample(.clip, i16, sample),
-            .i24, .i24_4b => bytesAsValue(i24, ptr[0..@sizeOf(i24)]).* = convertSample(.clip, i24, sample),
-            .i32 => bytesAsValue(i32, ptr[0..@sizeOf(i32)]).* = convertSample(.clip, i32, sample),
-            .f32 => bytesAsValue(f32, ptr[0..@sizeOf(f32)]).* = convertSample(.clip, f32, sample),
-        }
-    }
-
     pub inline fn sampleRate(player: *Player) u24 {
         return if (@hasField(Backend, "jack")) switch (player.data) {
             .jack => |b| b.sampleRate(),
@@ -257,7 +215,7 @@ pub const Player = struct {
         };
     }
 
-    pub inline fn channels(player: *Player) []Channel {
+    pub inline fn channels(player: *Player) []ChannelPosition {
         return switch (player.data) {
             inline else => |b| b.channels,
         };
@@ -269,9 +227,44 @@ pub const Player = struct {
         };
     }
 
-    pub inline fn writeStep(player: *Player) u8 {
-        return switch (player.data) {
-            inline else => |b| b.write_step,
+    pub fn write(player: *Player, comptime InputType: type, input: []const InputType, output: []u8) void {
+        const output_len = output.len / player.format().size();
+        std.debug.assert(output_len == input.len);
+
+        return switch (player.format()) {
+            .u8 => switch (InputType) {
+                u8 => @memcpy(@as([*]u8, @ptrCast(output))[0..output_len], input),
+                i8, i16, i24, i32 => conv.signedToUnsigned(input, @as([*]u8, @ptrCast(output))[0..output_len]),
+                f32 => conv.floatToUnsigned(input, @as([*]u8, @ptrCast(@alignCast(output)))[0..output_len]),
+                else => unreachable,
+            },
+            .i16 => switch (InputType) {
+                i16 => @memcpy(@as([*]i16, @ptrCast(output))[0..output_len], input),
+                u8 => conv.unsignedToSigned(input, @as([*]i16, @ptrCast(output))[0..output_len]),
+                i8, i24, i32 => conv.signedToSigned(input, @as([*]i16, @ptrCast(output))[0..output_len]),
+                f32 => conv.floatToSigned(input, @as([*]i16, @ptrCast(@alignCast(output)))[0..output_len]),
+                else => unreachable,
+            },
+            .i24, .i24_4b => switch (InputType) {
+                i24 => @memcpy(@as([*]i24, @ptrCast(output))[0..output_len], input),
+                u8 => conv.unsignedToSigned(input, @as([*]i24, @ptrCast(output))[0..output_len]),
+                i8, i16, i32 => conv.signedToSigned(input, @as([*]i24, @ptrCast(output))[0..output_len]),
+                f32 => conv.floatToSigned(input, @as([*]i24, @ptrCast(@alignCast(output)))[0..output_len]),
+                else => unreachable,
+            },
+            .i32 => switch (InputType) {
+                i32 => @memcpy(@as([*]i32, @ptrCast(output))[0..output_len], input),
+                u8 => conv.unsignedToSigned(input, @as([*]i32, @ptrCast(output))[0..output_len]),
+                i8, i16, i24 => conv.signedToSigned(input, @as([*]i32, @ptrCast(output))[0..output_len]),
+                f32 => conv.floatToSigned(input, @as([*]i32, @ptrCast(@alignCast(output)))[0..output_len]),
+                else => unreachable,
+            },
+            .f32 => switch (InputType) {
+                f32 => @memcpy(@as([*]f32, @ptrCast(@alignCast(output)))[0..output_len], input),
+                u8 => conv.unsignedToFloat(input, @as([*]f32, @ptrCast(output))[0..output_len]),
+                i8, i16, i24, i32 => conv.signedToFloat(input, @as([*]f32, @ptrCast(output))[0..output_len]),
+                else => unreachable,
+            },
         };
     }
 };
@@ -348,46 +341,6 @@ pub const Recorder = struct {
         };
     }
 
-    pub inline fn readAll(recorder: *Recorder, frame: usize, comptime T: type, samples: []T) void {
-        for (recorder.channels(), samples) |ch, *sample| sample.* = recorder.read(ch, frame, T);
-    }
-
-    pub inline fn read(recorder: *Recorder, channel: Channel, frame: usize, comptime T: type) T {
-        switch (T) {
-            u8, i8, i16, i24, i32, f32 => {},
-            else => @compileError(
-                \\invalid sample type. supported types are:
-                \\u8, i8, i16, i24, i32, f32
-            ),
-        }
-
-        const ptr = channel.ptr + frame * recorder.readStep();
-        return bytesAsValue(T, ptr[0..@sizeOf(T)]).*;
-    }
-
-    pub inline fn readAllAuto(recorder: *Recorder, frame: usize, comptime T: type, samples: []T) void {
-        for (recorder.channels(), samples) |ch, *sample| sample.* = recorder.readAuto(ch, frame, T);
-    }
-
-    pub inline fn readAuto(recorder: *Recorder, channel: Channel, frame: usize, comptime T: type) T {
-        switch (T) {
-            u8, i8, i16, i24, i32, f32 => {},
-            else => @compileError(
-                \\invalid sample type. supported types are:
-                \\u8, i8, i16, i24, i32, f32
-            ),
-        }
-
-        const ptr = channel.ptr + frame * recorder.readStep();
-        return switch (recorder.format()) {
-            .u8 => convertSample(.clip, T, bytesAsValue(u8, ptr[0..@sizeOf(u8)]).*),
-            .i16 => convertSample(.clip, T, bytesAsValue(i16, ptr[0..@sizeOf(i16)]).*),
-            .i24, .i24_4b => convertSample(.clip, T, bytesAsValue(i24, ptr[0..@sizeOf(i24)]).*),
-            .i32 => convertSample(.clip, T, bytesAsValue(i32, ptr[0..@sizeOf(i32)]).*),
-            .f32 => convertSample(.clip, T, bytesAsValue(f32, ptr[0..@sizeOf(f32)]).*),
-        };
-    }
-
     pub inline fn sampleRate(recorder: *Recorder) u24 {
         return if (@hasField(Backend, "jack")) switch (recorder.data) {
             .jack => |b| b.sampleRate(),
@@ -397,7 +350,7 @@ pub const Recorder = struct {
         };
     }
 
-    pub inline fn channels(recorder: *Recorder) []Channel {
+    pub inline fn channels(recorder: *Recorder) []ChannelPosition {
         return switch (recorder.data) {
             inline else => |b| b.channels,
         };
@@ -409,125 +362,53 @@ pub const Recorder = struct {
         };
     }
 
-    pub inline fn readStep(recorder: *Recorder) u8 {
-        return switch (recorder.data) {
-            inline else => |b| b.read_step,
+    pub fn read(recorder: *Recorder, comptime OutputType: type, output: []OutputType, input: []const u8) void {
+        const input_len = input.len / recorder.format().size();
+        std.debug.assert(input_len == output.len);
+
+        return switch (recorder.format()) {
+            .u8 => switch (OutputType) {
+                u8 => @memcpy(output, @as([*]const u8, @ptrCast(input))[0..input_len]),
+                i8, i16, i24, i32 => conv.unsignedToSigned(@as([*]const u8, @ptrCast(input))[0..input_len], output),
+                f32 => conv.unsignedToFloat(@as([*]const u8, @ptrCast(@alignCast(input)))[0..input_len], output),
+                else => unreachable,
+            },
+            .i16 => switch (OutputType) {
+                i16 => @memcpy(output, @as([*]const i16, @ptrCast(input))[0..input_len]),
+                u8 => conv.signedToUnsigned(@as([*]const i16, @ptrCast(input))[0..input_len], output),
+                i8, i24, i32 => conv.signedToSigned(@as([*]const i16, @ptrCast(input))[0..input_len], output),
+                f32 => conv.signedToFloat(@as([*]const i16, @ptrCast(@alignCast(input)))[0..input_len], output),
+                else => unreachable,
+            },
+            .i24, .i24_4b => switch (OutputType) {
+                i24 => @memcpy(output, @as([*]const i24, @ptrCast(input))[0..input_len]),
+                u8 => conv.signedToUnsigned(@as([*]const i24, @ptrCast(input))[0..input_len], output),
+                i8, i16, i32 => conv.signedToSigned(@as([*]const i24, @ptrCast(input))[0..input_len], output),
+                f32 => conv.signedToFloat(@as([*]const i24, @ptrCast(@alignCast(input)))[0..input_len], output),
+                else => unreachable,
+            },
+            .i32 => switch (OutputType) {
+                i32 => @memcpy(output, @as([*]const i32, @ptrCast(input))[0..input_len]),
+                u8 => conv.signedToUnsigned(@as([*]const i32, @ptrCast(input))[0..input_len], output),
+                i8, i16, i24 => conv.signedToSigned(@as([*]const i32, @ptrCast(input))[0..input_len], output),
+                f32 => conv.signedToFloat(@as([*]const i32, @ptrCast(@alignCast(input)))[0..input_len], output),
+                else => unreachable,
+            },
+            .f32 => switch (OutputType) {
+                f32 => @memcpy(output, @as([*]const f32, @ptrCast(@alignCast(input)))[0..input_len]),
+                u8 => conv.floatToUnsigned(@as([*]const f32, @ptrCast(input))[0..input_len], output),
+                i8, i16, i24, i32 => conv.floatToSigned(@as([*]const f32, @ptrCast(input))[0..input_len], output),
+                else => unreachable,
+            },
         };
     }
 };
-
-pub const FloatConvertionStrategy = enum { clip, dither };
-
-inline fn convertSample(comptime strategy: FloatConvertionStrategy, comptime T: type, sample: anytype) T {
-    const ST = @TypeOf(sample);
-    return switch (ST) {
-        u8 => switch (T) {
-            u8 => sample,
-            i8, i16, i24, i32 => unsignedToSigned(T, sample),
-            f32 => unsignedToFloat(T, sample),
-            else => unreachable,
-        },
-        i16 => switch (T) {
-            i16 => sample,
-            u8 => signedToUnsigned(T, sample),
-            i8, i24, i32 => signedToSigned(T, sample),
-            f32 => signedToFloat(T, sample),
-            else => unreachable,
-        },
-        i24 => switch (T) {
-            i24 => sample,
-            u8 => signedToUnsigned(T, sample),
-            i8, i16, i32 => signedToSigned(T, sample),
-            f32 => signedToFloat(T, sample),
-            else => unreachable,
-        },
-        i32 => switch (T) {
-            i32 => sample,
-            u8 => signedToUnsigned(T, sample),
-            i8, i16, i24 => signedToSigned(T, sample),
-            f32 => signedToFloat(T, sample),
-            else => unreachable,
-        },
-        f32 => switch (T) {
-            f32 => sample,
-            u8 => switch (strategy) {
-                .clip => floatToUnsignedClip(T, sample),
-                .dither => @compileError("TODO"),
-            },
-            i8, i16, i24, i32 => switch (strategy) {
-                .clip => floatToSignedClip(T, sample),
-                .dither => @compileError("TODO"),
-            },
-            else => unreachable,
-        },
-        else => @compileError("invalid type"),
-    };
-}
-
-test convertSample {
-    try std.testing.expectEqual(@as(i16, -31488), convertSample(.clip, i16, @as(u8, 5)));
-    try std.testing.expectEqual(@as(i24, -8060928), convertSample(.clip, i24, @as(u8, 5)));
-    try std.testing.expectEqual(@as(i32, -2063597568), convertSample(.clip, i32, @as(u8, 5)));
-    try std.testing.expectEqual(@as(f32, -0.9609375), convertSample(.clip, f32, @as(u8, 5)));
-
-    try std.testing.expectEqual(@as(u8, 128), convertSample(.clip, u8, @as(i16, 5)));
-    try std.testing.expectEqual(@as(i24, 1280), convertSample(.clip, i24, @as(i16, 5)));
-    try std.testing.expectEqual(@as(i32, 327680), convertSample(.clip, i32, @as(i16, 5)));
-    try std.testing.expectEqual(@as(f32, 1.52587890625e-4), convertSample(.clip, f32, @as(i16, 5)));
-
-    try std.testing.expectEqual(@as(u8, 128), convertSample(.clip, u8, @as(i24, 5)));
-    try std.testing.expectEqual(@as(i16, 0), convertSample(.clip, i16, @as(i24, 5)));
-    try std.testing.expectEqual(@as(i32, 1280), convertSample(.clip, i32, @as(i24, 5)));
-    try std.testing.expectEqual(@as(f32, 5.9604644775391e-7), convertSample(.clip, f32, @as(i24, 5)));
-
-    try std.testing.expectEqual(@as(u8, 191), convertSample(.clip, u8, @as(f32, 0.5)));
-    try std.testing.expectEqual(@as(i16, 16383), convertSample(.clip, i16, @as(f32, 0.5)));
-    try std.testing.expectEqual(@as(i24, 4194303), convertSample(.clip, i24, @as(f32, 0.5)));
-    try std.testing.expectEqual(@as(i32, 1073741824), convertSample(.clip, i32, @as(f32, 0.5)));
-}
-
-inline fn unsignedToSigned(comptime T: type, sample: anytype) T {
-    const half = 1 << (@bitSizeOf(@TypeOf(sample)) - 1);
-    const trunc = @bitSizeOf(T) - @bitSizeOf(@TypeOf(sample));
-    return @as(T, @intCast(sample -% half)) << trunc;
-}
-
-inline fn unsignedToFloat(comptime T: type, sample: anytype) T {
-    const half = (1 << @typeInfo(@TypeOf(sample)).Int.bits) / 2;
-    return (@as(T, @floatFromInt(sample)) - half) * 1.0 / half;
-}
-
-inline fn signedToSigned(comptime T: type, sample: anytype) T {
-    const trunc = @bitSizeOf(@TypeOf(sample)) - @bitSizeOf(T);
-    return std.math.shr(T, @as(T, @intCast(sample)), trunc);
-}
-
-inline fn signedToUnsigned(comptime T: type, sample: anytype) T {
-    const half = 1 << @bitSizeOf(T) - 1;
-    const trunc = @bitSizeOf(@TypeOf(sample)) - @bitSizeOf(T);
-    return @intCast((sample >> trunc) + half);
-}
-
-inline fn signedToFloat(comptime T: type, sample: anytype) T {
-    const max: f32 = std.math.maxInt(@TypeOf(sample)) + 1;
-    return @as(T, @floatFromInt(sample)) * (1.0 / max);
-}
-
-inline fn floatToSignedClip(comptime T: type, sample: f32) T {
-    const max = std.math.maxInt(T);
-    return @truncate(@as(i32, @intFromFloat(sample * max)));
-}
-
-inline fn floatToUnsignedClip(comptime T: type, sample: f32) T {
-    const half = std.math.maxInt(T) / 2;
-    return @intFromFloat(std.math.clamp((sample * half) + (half + 1), 0, std.math.maxInt(T)));
-}
 
 pub const Device = struct {
     id: [:0]const u8,
     name: [:0]const u8,
     mode: Mode,
-    channels: []Channel,
+    channels: []ChannelPosition,
     formats: []const Format,
     sample_rate: util.Range(u24),
 
@@ -538,58 +419,45 @@ pub const Device = struct {
 
     pub fn preferredFormat(device: Device, format: ?Format) Format {
         if (format) |f| {
-            for (device.formats) |fmt| {
-                if (f == fmt) {
-                    return fmt;
-                }
-            }
+            for (device.formats) |fmt| if (f == fmt) return fmt;
         }
 
         var best: Format = device.formats[0];
         for (device.formats) |fmt| {
-            if (fmt.size() >= best.size()) {
-                if (fmt == .i24_4b and best == .i24)
-                    continue;
-                best = fmt;
-            }
+            if (@intFromEnum(fmt) > @intFromEnum(best)) best = fmt;
         }
         return best;
     }
 };
 
-pub const Channel = struct {
-    ptr: [*]u8 = undefined,
-    id: Id,
-
-    pub const Id = enum {
-        front_center,
-        front_left,
-        front_right,
-        front_left_center,
-        front_right_center,
-        back_center,
-        back_left,
-        back_right,
-        side_left,
-        side_right,
-        top_center,
-        top_front_center,
-        top_front_left,
-        top_front_right,
-        top_back_center,
-        top_back_left,
-        top_back_right,
-        lfe,
-    };
+pub const ChannelPosition = enum {
+    front_center,
+    front_left,
+    front_right,
+    front_left_center,
+    front_right_center,
+    back_center,
+    back_left,
+    back_right,
+    side_left,
+    side_right,
+    top_center,
+    top_front_center,
+    top_front_left,
+    top_front_right,
+    top_back_center,
+    top_back_left,
+    top_back_right,
+    lfe,
 };
 
-pub const Format = enum {
-    u8,
-    i16,
-    i24,
-    i24_4b,
-    i32,
-    f32,
+pub const Format = enum(u3) {
+    u8 = 0,
+    i16 = 1,
+    i24 = 3,
+    i24_4b = 2,
+    i32 = 4,
+    f32 = 5,
 
     pub inline fn size(format: Format) u8 {
         return switch (format) {
@@ -627,8 +495,8 @@ pub const Format = enum {
         };
     }
 
-    pub inline fn frameSize(format: Format, channels: usize) u8 {
-        return format.size() * @as(u5, @intCast(channels));
+    pub inline fn frameSize(format: Format, channels: u8) u8 {
+        return format.size() * channels;
     }
 };
 

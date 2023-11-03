@@ -133,13 +133,13 @@ pub const Context = struct {
         ctx.devices_info.setDefault(.playback, 0);
         ctx.devices_info.setDefault(.capture, 1);
 
-        ctx.devices_info.list.items[0].channels = try ctx.allocator.alloc(main.Channel, 2);
-        ctx.devices_info.list.items[1].channels = try ctx.allocator.alloc(main.Channel, 2);
+        ctx.devices_info.list.items[0].channels = try ctx.allocator.alloc(main.ChannelPosition, 2);
+        ctx.devices_info.list.items[1].channels = try ctx.allocator.alloc(main.ChannelPosition, 2);
 
-        ctx.devices_info.list.items[0].channels[0] = .{ .id = .front_right };
-        ctx.devices_info.list.items[0].channels[1] = .{ .id = .front_left };
-        ctx.devices_info.list.items[1].channels[0] = .{ .id = .front_right };
-        ctx.devices_info.list.items[1].channels[1] = .{ .id = .front_left };
+        ctx.devices_info.list.items[0].channels[0] = .front_right;
+        ctx.devices_info.list.items[0].channels[1] = .front_left;
+        ctx.devices_info.list.items[1].channels[0] = .front_right;
+        ctx.devices_info.list.items[1].channels[1] = .front_left;
     }
 
     pub fn devices(ctx: Context) []const main.Device {
@@ -251,7 +251,6 @@ pub const Context = struct {
             .channels = device.channels,
             .format = .f32,
             .sample_rate = options.sample_rate,
-            .write_step = main.Format.frameSize(.f32, device.channels.len),
         };
         return .{ .pipewire = player };
     }
@@ -357,7 +356,6 @@ pub const Context = struct {
             .channels = device.channels,
             .format = .f32,
             .sample_rate = options.sample_rate,
-            .read_step = main.Format.frameSize(.f32, device.channels.len),
         };
         return .{ .pipewire = recorder };
     }
@@ -383,10 +381,9 @@ pub const Player = struct {
     writeFn: main.WriteFn,
     user_data: ?*anyopaque,
 
-    channels: []main.Channel,
+    channels: []main.ChannelPosition,
     format: main.Format,
     sample_rate: u24,
-    write_step: u8,
 
     pub fn processCb(player_opaque: ?*anyopaque) callconv(.C) void {
         var player = @as(*Player, @ptrCast(@alignCast(player_opaque.?)));
@@ -402,15 +399,12 @@ pub const Player = struct {
             return;
         }
 
-        const stride = player.format.frameSize(player.channels.len);
-        const frames = @min(buf.*.requested, buf.*.buffer.*.datas[0].maxsize / stride);
+        const stride = player.format.frameSize(@intCast(player.channels.len));
+        const frames = @min(buf.*.requested * stride, buf.*.buffer.*.datas[0].maxsize);
         buf.*.buffer.*.datas[0].chunk.*.stride = stride;
-        buf.*.buffer.*.datas[0].chunk.*.size = @intCast(frames * stride);
+        buf.*.buffer.*.datas[0].chunk.*.size = @intCast(frames);
 
-        for (player.channels, 0..) |*ch, i| {
-            ch.ptr = @as([*]u8, @ptrCast(buf.*.buffer.*.datas[0].data.?)) + player.format.frameSize(i);
-        }
-        player.writeFn(player.user_data, frames);
+        player.writeFn(player.user_data, @as([*]u8, @ptrCast(buf.*.buffer.*.datas[0].data.?))[0..frames]);
     }
 
     pub fn deinit(player: *Player) void {
@@ -462,10 +456,9 @@ pub const Recorder = struct {
     readFn: main.ReadFn,
     user_data: ?*anyopaque,
 
-    channels: []main.Channel,
+    channels: []main.ChannelPosition,
     format: main.Format,
     sample_rate: u24,
-    read_step: u8,
 
     pub fn processCb(recorder_opaque: ?*anyopaque) callconv(.C) void {
         var recorder = @as(*Recorder, @ptrCast(@alignCast(recorder_opaque.?)));
@@ -481,13 +474,8 @@ pub const Recorder = struct {
             return;
         }
 
-        for (recorder.channels, 0..) |*ch, i| {
-            ch.ptr = @as([*]u8, @ptrCast(buf.*.buffer.*.datas[0].data.?)) + recorder.format.frameSize(i);
-        }
-
-        const stride: u32 = @intCast(buf.*.buffer.*.datas[0].chunk.*.stride);
-        const frames = buf.*.buffer.*.datas[0].chunk.*.size / stride;
-        recorder.readFn(recorder.user_data, frames);
+        const frames = buf.*.buffer.*.datas[0].chunk.*.size;
+        recorder.readFn(recorder.user_data, @as([*]u8, @ptrCast(buf.*.buffer.*.datas[0].data.?))[0..frames]);
     }
 
     pub fn deinit(recorder: *Recorder) void {

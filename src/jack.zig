@@ -123,9 +123,7 @@ pub const Context = struct {
 
             for (ctx.devices_info.list.items) |*dev| {
                 if (std.mem.eql(u8, dev.id, id) and mode == dev.mode) {
-                    const new_ch = main.Channel{
-                        .id = @as(main.Channel.Id, @enumFromInt(dev.channels.len)),
-                    };
+                    const new_ch: main.ChannelPosition = @enumFromInt(dev.channels.len);
                     dev.channels = try ctx.allocator.realloc(dev.channels, dev.channels.len + 1);
                     dev.channels[dev.channels.len - 1] = new_ch;
                     break :outer;
@@ -137,8 +135,8 @@ pub const Context = struct {
                 .name = name,
                 .mode = mode,
                 .channels = blk: {
-                    var channels = try ctx.allocator.alloc(main.Channel, 1);
-                    channels[0] = .{ .id = @as(main.Channel.Id, @enumFromInt(0)) };
+                    var channels = try ctx.allocator.alloc(main.ChannelPosition, 1);
+                    channels[0] = .front_center;
                     break :blk channels;
                 },
                 .formats = &.{.f32},
@@ -203,7 +201,6 @@ pub const Context = struct {
             .user_data = options.user_data,
             .channels = device.channels,
             .format = .f32,
-            .write_step = main.Format.size(.f32),
         };
         return .{ .jack = player };
     }
@@ -232,7 +229,6 @@ pub const Context = struct {
             .user_data = options.user_data,
             .channels = device.channels,
             .format = .f32,
-            .read_step = main.Format.size(.f32),
         };
         return .{ .jack = recorder };
     }
@@ -248,9 +244,8 @@ pub const Player = struct {
     writeFn: main.WriteFn,
     user_data: ?*anyopaque,
 
-    channels: []main.Channel,
+    channels: []main.ChannelPosition,
     format: main.Format,
-    write_step: u8,
 
     pub fn deinit(player: *Player) void {
         player.allocator.free(player.ports);
@@ -277,10 +272,11 @@ pub const Player = struct {
     fn processCallback(n_frames: c.jack_nframes_t, player_opaque: ?*anyopaque) callconv(.C) c_int {
         const player = @as(*Player, @ptrCast(@alignCast(player_opaque.?)));
 
-        for (player.channels, 0..) |*ch, i| {
-            ch.*.ptr = @as([*]u8, @ptrCast(lib.jack_port_get_buffer(player.ports[i], n_frames)));
-        }
-        player.writeFn(player.user_data, n_frames);
+        if (true) @panic("TODO: convert planar to interleaved");
+        // for (player.channels, 0..) |*ch, i| {
+        //     ch.*.ptr = @as([*]u8, @ptrCast(lib.jack_port_get_buffer(player.ports[i], n_frames)));
+        // }
+        player.writeFn(player.user_data, undefined, n_frames);
 
         return 0;
     }
@@ -330,9 +326,8 @@ pub const Recorder = struct {
     readFn: main.ReadFn,
     user_data: ?*anyopaque,
 
-    channels: []main.Channel,
+    channels: []main.ChannelPosition,
     format: main.Format,
-    read_step: u8,
 
     pub fn deinit(recorder: *Recorder) void {
         recorder.allocator.free(recorder.ports);
@@ -359,9 +354,10 @@ pub const Recorder = struct {
     fn processCallback(n_frames: c.jack_nframes_t, recorder_opaque: ?*anyopaque) callconv(.C) c_int {
         const recorder = @as(*Recorder, @ptrCast(@alignCast(recorder_opaque.?)));
 
-        for (recorder.channels, 0..) |*ch, i| {
-            ch.*.ptr = @as([*]u8, @ptrCast(lib.jack_port_get_buffer(recorder.ports[i], n_frames)));
-        }
+        if (true) @panic("TODO: convert planar to interleaved");
+        // for (recorder.channels, 0..) |*ch, i| {
+        //     ch.*.ptr = @as([*]u8, @ptrCast(lib.jack_port_get_buffer(recorder.ports[i], n_frames)));
+        // }
         recorder.readFn(recorder.user_data, n_frames);
 
         return 0;

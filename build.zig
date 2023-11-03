@@ -29,7 +29,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&test_run_cmd.step);
 
     inline for ([_][]const u8{
-        "sine-wave",
+        "sine",
         "record",
     }) |example| {
         const example_exe = b.addExecutable(.{
