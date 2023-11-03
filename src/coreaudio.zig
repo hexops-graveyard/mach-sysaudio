@@ -168,7 +168,7 @@ pub const Context = struct {
                     output_channel_count += output_audio_buffer_list.mBuffers[mBufferIndex].mNumberChannels;
                 }
 
-                var channels = try ctx.allocator.alloc(main.Channel, output_channel_count);
+                var channels = try ctx.allocator.alloc(main.ChannelPosition, output_channel_count);
 
                 prop_address.mSelector = c.kAudioDevicePropertyNominalSampleRate;
                 io_size = @sizeOf(f64);
@@ -317,7 +317,6 @@ pub const Context = struct {
             .channels = device.channels,
             .format = options.format,
             .sample_rate = options.sample_rate,
-            .write_step = options.format.frameSize(device.channels.len),
         };
         return .{ .coreaudio = player };
     }
@@ -472,7 +471,6 @@ pub const Context = struct {
             .channels = device.channels,
             .format = options.format,
             .sample_rate = options.sample_rate,
-            .read_step = options.format.frameSize(device.channels.len),
         };
         return .{ .coreaudio = recorder };
     }
@@ -486,10 +484,9 @@ pub const Player = struct {
     writeFn: main.WriteFn,
     user_data: ?*anyopaque,
 
-    channels: []main.Channel,
+    channels: []main.ChannelPosition,
     format: main.Format,
     sample_rate: u24,
-    write_step: u8,
 
     pub fn renderCallback(
         player_opaque: ?*anyopaque,
@@ -506,11 +503,8 @@ pub const Player = struct {
 
         const player = @as(*Player, @ptrCast(@alignCast(player_opaque.?)));
 
-        for (player.channels, 0..) |*ch, i| {
-            ch.ptr = @as([*]u8, @ptrCast(buf.*.mBuffers[0].mData.?)) + player.format.frameSize(i);
-        }
-        const frames = buf.*.mBuffers[0].mDataByteSize / player.format.frameSize(player.channels.len);
-        player.writeFn(player.user_data, frames);
+        const frames = buf.*.mBuffers[0].mDataByteSize;
+        player.writeFn(player.user_data, @as([*]u8, @ptrCast(buf.*.mBuffers[0].mData.?))[0..frames]);
 
         return c.noErr;
     }
@@ -584,10 +578,9 @@ pub const Recorder = struct {
     readFn: main.ReadFn,
     user_data: ?*anyopaque,
 
-    channels: []main.Channel,
+    channels: []main.ChannelPosition,
     format: main.Format,
     sample_rate: u24,
-    read_step: u8,
 
     pub fn captureCallback(
         recorder_opaque: ?*anyopaque,
@@ -609,7 +602,7 @@ pub const Recorder = struct {
         // Ensure our buffer matches the size needed for the render operation. Note that the buffer
         // may grow (in the case of multi-channel audio during the first render callback) or shrink
         // in e.g. the event of the device being unplugged and the default input device switching.
-        const new_len = recorder.format.size() * num_frames * recorder.channels.len;
+        const new_len = num_frames * recorder.format.frameSize(@intCast(recorder.channels.len));
         if (recorder.m_data == null or recorder.m_data.?.len != new_len) {
             if (recorder.m_data) |old| recorder.allocator.free(old);
             recorder.m_data = recorder.allocator.alloc(u8, new_len) catch return c.noErr;
@@ -634,16 +627,14 @@ pub const Recorder = struct {
         }
 
         if (recorder.buf_list.*.mNumberBuffers == 1) {
-            for (recorder.channels, 0..) |*ch, i| {
-                ch.ptr = @as([*]u8, @ptrCast(recorder.buf_list.*.mBuffers[0].mData.?)) + recorder.format.frameSize(i);
-            }
+            recorder.readFn(recorder.user_data, @as([*]u8, @ptrCast(recorder.buf_list.*.mBuffers[0].mData.?))[0..new_len]);
         } else {
-            for (recorder.channels, 0..) |*ch, i| {
-                ch.ptr = @as([*]u8, @ptrCast(recorder.buf_list.*.mBuffers[i].mData.?));
-            }
+            @panic("TODO: convert planar to interleaved");
+            // for (recorder.channels, 0..) |*ch, i| {
+            //     ch.ptr = @as([*]u8, @ptrCast(recorder.buf_list.*.mBuffers[i].mData.?));
+            // }
         }
 
-        recorder.readFn(recorder.user_data, num_frames);
         return c.noErr;
     }
 
@@ -725,10 +716,10 @@ fn createStreamDesc(format: main.Format, sample_rate: u24, ch_count: usize) !c.A
             .u8 => return error.IncompatibleDevice,
             .i24_4b => return error.IncompatibleDevice,
         },
-        .mBytesPerPacket = format.frameSize(ch_count),
+        .mBytesPerPacket = format.frameSize(@intCast(ch_count)),
         .mFramesPerPacket = 1,
-        .mBytesPerFrame = format.frameSize(ch_count),
-        .mChannelsPerFrame = @as(c_uint, @intCast(ch_count)),
+        .mBytesPerFrame = format.frameSize(@intCast(ch_count)),
+        .mChannelsPerFrame = @intCast(ch_count),
         .mBitsPerChannel = switch (format) {
             .i16 => 16,
             .i24 => 24,

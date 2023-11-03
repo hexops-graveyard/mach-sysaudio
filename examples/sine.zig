@@ -51,12 +51,19 @@ pub fn main() !void {
 const pitch = 440.0;
 const radians_per_second = pitch * 2.0 * std.math.pi;
 var seconds_offset: f32 = 0.0;
-fn writeCallback(_: ?*anyopaque, frames: usize) void {
+
+fn writeCallback(_: ?*anyopaque, output: []u8) void {
     const seconds_per_frame = 1.0 / @as(f32, @floatFromInt(player.sampleRate()));
-    for (0..frames) |fi| {
-        const sample = std.math.sin((seconds_offset + @as(f32, @floatFromInt(fi)) * seconds_per_frame) * radians_per_second);
-        player.writeAllAuto(fi, sample);
+    const frame_size = player.format().frameSize(@intCast(player.channels().len));
+    const frames = output.len / frame_size;
+
+    var i: usize = 0;
+    while (i < output.len) : (i += frame_size) {
+        const frame_index: f32 = @floatFromInt(i / frame_size);
+        const sample = @sin((seconds_offset + frame_index * seconds_per_frame) * radians_per_second);
+        player.write(f32, &.{ sample, sample }, output[i..][0..frame_size]);
     }
+
     seconds_offset = @mod(seconds_offset + seconds_per_frame * @as(f32, @floatFromInt(frames)), 1.0);
 }
 

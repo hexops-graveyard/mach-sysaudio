@@ -53,9 +53,9 @@ pub const Context = struct {
         ctx.devices_info.clear(ctx.allocator);
 
         try ctx.devices_info.list.append(ctx.allocator, default_playback);
-        ctx.devices_info.list.items[0].channels = try ctx.allocator.alloc(main.Channel, 2);
-        ctx.devices_info.list.items[0].channels[0] = .{ .id = .front_left };
-        ctx.devices_info.list.items[0].channels[1] = .{ .id = .front_right };
+        ctx.devices_info.list.items[0].channels = try ctx.allocator.alloc(main.ChannelPosition, 2);
+        ctx.devices_info.list.items[0].channels[0] = .front_left;
+        ctx.devices_info.list.items[0].channels[1] = .front_right;
         ctx.devices_info.setDefault(.playback, 0);
     }
 
@@ -115,12 +115,7 @@ pub const Context = struct {
             .channels = device.channels,
             .format = .f32,
             .sample_rate = options.sample_rate,
-            .write_step = main.Format.size(.f32),
         };
-
-        for (player.channels, 0..) |*ch, i| {
-            ch.*.ptr = player.buf.ptr + i * channel_size_bytes;
-        }
 
         return .{ .webaudio = player };
     }
@@ -135,7 +130,6 @@ pub const Context = struct {
             .channels = device.channels,
             .format = options.format,
             .sample_rate = options.sample_rate,
-            .read_step = 0,
         };
         return .{ .webaudio = recorder };
     }
@@ -154,10 +148,9 @@ pub const Player = struct {
     writeFn: main.WriteFn,
     user_data: ?*anyopaque,
 
-    channels: []main.Channel,
+    channels: []main.ChannelPosition,
     format: main.Format,
     sample_rate: u24,
-    write_step: u8,
 
     pub fn deinit(player: *Player) void {
         player.resume_on_click.deinit();
@@ -199,7 +192,7 @@ pub const Player = struct {
         const output_buffer = event.get("outputBuffer").view(.object);
         defer output_buffer.deinit();
 
-        player.writeFn(player.user_data, channel_size);
+        player.writeFn(player.user_data, player.buf[0..channel_size]);
 
         for (player.channels, 0..) |_, i| {
             player.buf_js.copyBytes(player.buf[i * channel_size_bytes .. (i + 1) * channel_size_bytes]);
@@ -243,10 +236,9 @@ pub const Recorder = struct {
     is_paused: bool,
     vol: f32,
 
-    channels: []main.Channel,
+    channels: []main.ChannelPosition,
     format: main.Format,
     sample_rate: u24,
-    read_step: u8,
 
     pub fn deinit(recorder: *Recorder) void {
         recorder.allocator.destroy(recorder);

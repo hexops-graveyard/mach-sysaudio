@@ -323,9 +323,9 @@ pub const Context = struct {
 
                             if (chmap[0] == null) continue;
 
-                            var channels = try ctx.allocator.alloc(main.Channel, chmap.*.*.map.channels);
+                            var channels = try ctx.allocator.alloc(main.ChannelPosition, chmap.*.*.map.channels);
                             for (channels, 0..) |*ch, i|
-                                ch.*.id = fromAlsaChannel(chmap[0][0].map.pos()[i]) catch return error.OpeningDevice;
+                                ch.* = fromAlsaChannel(chmap[0][0].map.pos()[i]) catch return error.OpeningDevice;
                             break :blk channels;
                         } else {
                             continue;
@@ -488,7 +488,7 @@ pub const Context = struct {
             .allocator = ctx.allocator,
             .thread = undefined,
             .aborted = .{ .value = false },
-            .sample_buffer = try ctx.allocator.alloc(u8, period_size * format.frameSize(device.channels.len)),
+            .sample_buffer = try ctx.allocator.alloc(u8, period_size * format.frameSize(@intCast(device.channels.len))),
             .period_size = period_size,
             .pcm = pcm.?,
             .mixer = mixer.?,
@@ -499,7 +499,6 @@ pub const Context = struct {
             .channels = device.channels,
             .format = format,
             .sample_rate = sample_rate,
-            .write_step = format.frameSize(device.channels.len),
         };
         return .{ .alsa = player };
     }
@@ -519,7 +518,7 @@ pub const Context = struct {
             .allocator = ctx.allocator,
             .thread = undefined,
             .aborted = .{ .value = false },
-            .sample_buffer = try ctx.allocator.alloc(u8, period_size * format.frameSize(device.channels.len)),
+            .sample_buffer = try ctx.allocator.alloc(u8, period_size * format.frameSize(@intCast(device.channels.len))),
             .period_size = period_size,
             .pcm = pcm.?,
             .mixer = mixer.?,
@@ -530,7 +529,6 @@ pub const Context = struct {
             .channels = device.channels,
             .format = format,
             .sample_rate = sample_rate,
-            .read_step = format.frameSize(device.channels.len),
         };
         return .{ .alsa = recorder };
     }
@@ -549,10 +547,9 @@ pub const Player = struct {
     writeFn: main.WriteFn,
     user_data: ?*anyopaque,
 
-    channels: []main.Channel,
+    channels: []main.ChannelPosition,
     format: main.Format,
     sample_rate: u24,
-    write_step: u8,
 
     pub fn deinit(player: *Player) void {
         player.aborted.store(true, .Unordered);
@@ -579,14 +576,13 @@ pub const Player = struct {
     }
 
     fn writeThread(player: *Player) void {
-        for (player.channels, 0..) |*ch, i| {
-            ch.*.ptr = player.sample_buffer.ptr + player.format.frameSize(i);
-        }
-
         var underrun = false;
         while (!player.aborted.load(.Unordered)) {
             if (!underrun) {
-                player.writeFn(player.user_data, player.period_size);
+                player.writeFn(
+                    player.user_data,
+                    player.sample_buffer[0 .. player.period_size * player.format.frameSize(@intCast(player.channels.len))],
+                );
             }
             underrun = false;
             const n = lib.snd_pcm_writei(player.pcm, player.sample_buffer.ptr, player.period_size);
@@ -665,10 +661,9 @@ pub const Recorder = struct {
     readFn: main.ReadFn,
     user_data: ?*anyopaque,
 
-    channels: []main.Channel,
+    channels: []main.ChannelPosition,
     format: main.Format,
     sample_rate: u24,
-    read_step: u8,
 
     pub fn deinit(recorder: *Recorder) void {
         recorder.aborted.store(true, .Unordered);
@@ -695,14 +690,10 @@ pub const Recorder = struct {
     }
 
     fn readThread(recorder: *Recorder) void {
-        for (recorder.channels, 0..) |*ch, i| {
-            ch.*.ptr = recorder.sample_buffer.ptr + recorder.format.frameSize(i);
-        }
-
         var underrun = false;
         while (!recorder.aborted.load(.Unordered)) {
             if (!underrun) {
-                recorder.readFn(recorder.user_data, recorder.period_size);
+                recorder.readFn(recorder.user_data, recorder.sample_buffer[0..recorder.period_size]);
             }
             underrun = false;
             const n = lib.snd_pcm_readi(recorder.pcm, recorder.sample_buffer.ptr, recorder.period_size);
@@ -793,7 +784,7 @@ pub fn toAlsaFormat(format: main.Format) c.snd_pcm_format_t {
     };
 }
 
-pub fn fromAlsaChannel(pos: c_uint) !main.Channel.Id {
+pub fn fromAlsaChannel(pos: c_uint) !main.ChannelPosition {
     return switch (pos) {
         c.SND_CHMAP_UNKNOWN, c.SND_CHMAP_NA => return error.Invalid,
         c.SND_CHMAP_MONO, c.SND_CHMAP_FC => .front_center,
@@ -819,7 +810,7 @@ pub fn fromAlsaChannel(pos: c_uint) !main.Channel.Id {
     };
 }
 
-pub fn toCHMAP(pos: main.Channel.Id) c_uint {
+pub fn toCHMAP(pos: main.ChannelPosition) c_uint {
     return switch (pos) {
         .front_center => c.SND_CHMAP_FC,
         .front_left => c.SND_CHMAP_FL,

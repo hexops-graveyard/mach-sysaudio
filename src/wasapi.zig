@@ -248,11 +248,10 @@ pub const Context = struct {
                     };
                 },
                 .channels = blk: {
-                    var chn_arr = std.ArrayList(main.Channel).init(ctx.allocator);
+                    var chn_arr = std.ArrayList(main.ChannelPosition).init(ctx.allocator);
                     var channel: u32 = win32.SPEAKER_FRONT_LEFT;
                     while (channel < win32.SPEAKER_ALL) : (channel <<= 1) {
-                        if (wf.dwChannelMask & channel != 0)
-                            try chn_arr.append(.{ .id = fromWASApiChannel(channel) });
+                        if (wf.dwChannelMask & channel != 0) try chn_arr.append(fromWASApiChannel(channel));
                     }
                     break :blk try chn_arr.toOwnedSlice();
                 },
@@ -346,7 +345,7 @@ pub const Context = struct {
         return ctx.devices_info.default(mode);
     }
 
-    fn fromWASApiChannel(speaker: u32) main.Channel.Id {
+    fn fromWASApiChannel(speaker: u32) main.ChannelPosition {
         return switch (speaker) {
             win32.SPEAKER_FRONT_CENTER => .front_center,
             win32.SPEAKER_FRONT_LEFT => .front_left,
@@ -466,8 +465,8 @@ pub const Context = struct {
                 .wFormatTag = win32.WAVE_FORMAT_EXTENSIBLE,
                 .nChannels = @as(u16, @intCast(device.channels.len)),
                 .nSamplesPerSec = sample_rate,
-                .nAvgBytesPerSec = sample_rate * format.frameSize(device.channels.len),
-                .nBlockAlign = format.frameSize(device.channels.len),
+                .nAvgBytesPerSec = sample_rate * format.frameSize(@intCast(device.channels.len)),
+                .nBlockAlign = format.frameSize(@intCast(device.channels.len)),
                 .wBitsPerSample = format.sizeBits(),
                 .cbSize = 0x16,
             },
@@ -618,7 +617,6 @@ pub const Context = struct {
             .channels = device.channels,
             .format = format,
             .sample_rate = sample_rate,
-            .write_step = format.frameSize(device.channels.len),
         };
         return .{ .wasapi = player };
     }
@@ -667,7 +665,6 @@ pub const Context = struct {
             .channels = device.channels,
             .format = format,
             .sample_rate = sample_rate,
-            .read_step = format.frameSize(device.channels.len),
         };
         return .{ .wasapi = recorder };
     }
@@ -684,10 +681,10 @@ pub const Context = struct {
         };
     }
 
-    fn toChannelMask(channels: []const main.Channel) u32 {
+    fn toChannelMask(channels: []const main.ChannelPosition) u32 {
         var mask: u32 = 0;
         for (channels) |ch| {
-            mask |= switch (ch.id) {
+            mask |= switch (ch) {
                 .front_center => win32.SPEAKER_FRONT_CENTER,
                 .front_left => win32.SPEAKER_FRONT_LEFT,
                 .front_right => win32.SPEAKER_FRONT_RIGHT,
@@ -727,10 +724,9 @@ pub const Player = struct {
     writeFn: main.WriteFn,
     user_data: ?*anyopaque,
 
-    channels: []main.Channel,
+    channels: []main.ChannelPosition,
     format: main.Format,
     sample_rate: u24,
-    write_step: u8,
 
     pub fn deinit(player: *Player) void {
         player.aborted.store(true, .Unordered);
@@ -797,11 +793,10 @@ pub const Player = struct {
                     else => unreachable,
                 }
 
-                for (player.channels, 0..) |*ch, i| {
-                    ch.*.ptr = data + player.format.frameSize(i);
-                }
-
-                player.writeFn(player.user_data, frames);
+                player.writeFn(
+                    player.user_data,
+                    data[0 .. frames * player.format.frameSize(@intCast(player.channels.len))],
+                );
 
                 hr = player.render_client.?.ReleaseBuffer(frames, 0);
                 switch (hr) {
@@ -891,10 +886,9 @@ pub const Recorder = struct {
     readFn: main.ReadFn,
     user_data: ?*anyopaque,
 
-    channels: []main.Channel,
+    channels: []main.ChannelPosition,
     format: main.Format,
     sample_rate: u24,
-    read_step: u8,
 
     pub fn deinit(recorder: *Recorder) void {
         recorder.aborted.store(true, .Unordered);
@@ -962,11 +956,10 @@ pub const Recorder = struct {
                     else => unreachable,
                 }
 
-                for (recorder.channels, 0..) |*ch, i| {
-                    ch.*.ptr = data + recorder.format.frameSize(i);
-                }
-
-                recorder.readFn(recorder.user_data, frames);
+                recorder.readFn(
+                    recorder.user_data,
+                    data[0 .. frames * recorder.format.frameSize(@intCast(recorder.channels.len))],
+                );
 
                 hr = recorder.capture_client.?.ReleaseBuffer(frames);
                 switch (hr) {

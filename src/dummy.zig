@@ -62,11 +62,11 @@ pub const Context = struct {
         ctx.devices_info.setDefault(.playback, 0);
         ctx.devices_info.setDefault(.capture, 1);
 
-        ctx.devices_info.list.items[0].channels = try ctx.allocator.alloc(main.Channel, 1);
-        ctx.devices_info.list.items[1].channels = try ctx.allocator.alloc(main.Channel, 1);
+        ctx.devices_info.list.items[0].channels = try ctx.allocator.alloc(main.ChannelPosition, 1);
+        ctx.devices_info.list.items[1].channels = try ctx.allocator.alloc(main.ChannelPosition, 1);
 
-        ctx.devices_info.list.items[0].channels[0] = .{ .id = .front_center };
-        ctx.devices_info.list.items[1].channels[0] = .{ .id = .front_center };
+        ctx.devices_info.list.items[0].channels[0] = .front_center;
+        ctx.devices_info.list.items[1].channels[0] = .front_center;
     }
 
     pub fn devices(ctx: Context) []const main.Device {
@@ -87,7 +87,6 @@ pub const Context = struct {
             .channels = device.channels,
             .format = options.format,
             .sample_rate = options.sample_rate,
-            .write_step = 0,
         };
         return .{ .dummy = player };
     }
@@ -102,7 +101,6 @@ pub const Context = struct {
             .channels = device.channels,
             .format = options.format,
             .sample_rate = options.sample_rate,
-            .read_step = 0,
         };
         return .{ .dummy = recorder };
     }
@@ -113,10 +111,9 @@ pub const Player = struct {
     is_paused: bool,
     vol: f32,
 
-    channels: []main.Channel,
+    channels: []main.ChannelPosition,
     format: main.Format,
     sample_rate: u24,
-    write_step: u8,
 
     pub fn deinit(player: *Player) void {
         player.allocator.destroy(player);
@@ -152,10 +149,9 @@ pub const Recorder = struct {
     is_paused: bool,
     vol: f32,
 
-    channels: []main.Channel,
+    channels: []main.ChannelPosition,
     format: main.Format,
     sample_rate: u24,
-    read_step: u8,
 
     pub fn deinit(recorder: *Recorder) void {
         recorder.allocator.destroy(recorder);
