@@ -743,11 +743,7 @@ fn performOperation(main_loop: *c.pa_threaded_mainloop, op: ?*c.pa_operation) vo
     }
 }
 
-pub const available_formats = &[_]main.Format{
-    .u8,  .i16,
-    .i24, .i24_4b,
-    .i32, .f32,
-};
+pub const available_formats = &[_]main.Format{ .u8, .i16, .i24, .i32, .f32 };
 
 pub fn fromPAChannelPos(pos: c.pa_channel_position_t) !main.ChannelPosition {
     return switch (pos) {
@@ -781,7 +777,6 @@ pub fn toPAFormat(format: main.Format) c.pa_sample_format_t {
         .u8 => c.PA_SAMPLE_U8,
         .i16 => if (is_little) c.PA_SAMPLE_S16LE else c.PA_SAMPLE_S16BE,
         .i24 => if (is_little) c.PA_SAMPLE_S24LE else c.PA_SAMPLE_S24LE,
-        .i24_4b => if (is_little) c.PA_SAMPLE_S24_32LE else c.PA_SAMPLE_S24_32BE,
         .i32 => if (is_little) c.PA_SAMPLE_S32LE else c.PA_SAMPLE_S32BE,
         .f32 => if (is_little) c.PA_SAMPLE_FLOAT32LE else c.PA_SAMPLE_FLOAT32BE,
     };
@@ -816,8 +811,4 @@ fn toPAChannelPos(channel_id: main.ChannelPosition) !c.pa_channel_position_t {
         .top_back_left => c.PA_CHANNEL_POSITION_TOP_REAR_LEFT,
         .top_back_right => c.PA_CHANNEL_POSITION_TOP_REAR_RIGHT,
     };
-}
-
-test "reference declarations" {
-    std.testing.refAllDeclsRecursive(@This());
 }

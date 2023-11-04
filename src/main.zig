@@ -226,47 +226,6 @@ pub const Player = struct {
             inline else => |b| b.format,
         };
     }
-
-    pub fn write(player: *Player, comptime InputType: type, input: []const InputType, output: []u8) void {
-        const output_len = output.len / player.format().size();
-        std.debug.assert(output_len == input.len);
-
-        return switch (player.format()) {
-            .u8 => switch (InputType) {
-                u8 => @memcpy(@as([*]u8, @ptrCast(output))[0..output_len], input),
-                i8, i16, i24, i32 => conv.signedToUnsigned(input, @as([*]u8, @ptrCast(output))[0..output_len]),
-                f32 => conv.floatToUnsigned(input, @as([*]u8, @ptrCast(@alignCast(output)))[0..output_len]),
-                else => unreachable,
-            },
-            .i16 => switch (InputType) {
-                i16 => @memcpy(@as([*]i16, @ptrCast(output))[0..output_len], input),
-                u8 => conv.unsignedToSigned(input, @as([*]i16, @ptrCast(output))[0..output_len]),
-                i8, i24, i32 => conv.signedToSigned(input, @as([*]i16, @ptrCast(output))[0..output_len]),
-                f32 => conv.floatToSigned(input, @as([*]i16, @ptrCast(@alignCast(output)))[0..output_len]),
-                else => unreachable,
-            },
-            .i24, .i24_4b => switch (InputType) {
-                i24 => @memcpy(@as([*]i24, @ptrCast(output))[0..output_len], input),
-                u8 => conv.unsignedToSigned(input, @as([*]i24, @ptrCast(output))[0..output_len]),
-                i8, i16, i32 => conv.signedToSigned(input, @as([*]i24, @ptrCast(output))[0..output_len]),
-                f32 => conv.floatToSigned(input, @as([*]i24, @ptrCast(@alignCast(output)))[0..output_len]),
-                else => unreachable,
-            },
-            .i32 => switch (InputType) {
-                i32 => @memcpy(@as([*]i32, @ptrCast(output))[0..output_len], input),
-                u8 => conv.unsignedToSigned(input, @as([*]i32, @ptrCast(output))[0..output_len]),
-                i8, i16, i24 => conv.signedToSigned(input, @as([*]i32, @ptrCast(output))[0..output_len]),
-                f32 => conv.floatToSigned(input, @as([*]i32, @ptrCast(@alignCast(output)))[0..output_len]),
-                else => unreachable,
-            },
-            .f32 => switch (InputType) {
-                f32 => @memcpy(@as([*]f32, @ptrCast(@alignCast(output)))[0..output_len], input),
-                u8 => conv.unsignedToFloat(input, @as([*]f32, @ptrCast(output))[0..output_len]),
-                i8, i16, i24, i32 => conv.signedToFloat(input, @as([*]f32, @ptrCast(output))[0..output_len]),
-                else => unreachable,
-            },
-        };
-    }
 };
 
 pub const Recorder = struct {
@@ -361,48 +320,89 @@ pub const Recorder = struct {
             inline else => |b| b.format,
         };
     }
-
-    pub fn read(recorder: *Recorder, comptime OutputType: type, output: []OutputType, input: []const u8) void {
-        const input_len = input.len / recorder.format().size();
-        std.debug.assert(input_len == output.len);
-
-        return switch (recorder.format()) {
-            .u8 => switch (OutputType) {
-                u8 => @memcpy(output, @as([*]const u8, @ptrCast(input))[0..input_len]),
-                i8, i16, i24, i32 => conv.unsignedToSigned(@as([*]const u8, @ptrCast(input))[0..input_len], output),
-                f32 => conv.unsignedToFloat(@as([*]const u8, @ptrCast(@alignCast(input)))[0..input_len], output),
-                else => unreachable,
-            },
-            .i16 => switch (OutputType) {
-                i16 => @memcpy(output, @as([*]const i16, @ptrCast(input))[0..input_len]),
-                u8 => conv.signedToUnsigned(@as([*]const i16, @ptrCast(input))[0..input_len], output),
-                i8, i24, i32 => conv.signedToSigned(@as([*]const i16, @ptrCast(input))[0..input_len], output),
-                f32 => conv.signedToFloat(@as([*]const i16, @ptrCast(@alignCast(input)))[0..input_len], output),
-                else => unreachable,
-            },
-            .i24, .i24_4b => switch (OutputType) {
-                i24 => @memcpy(output, @as([*]const i24, @ptrCast(input))[0..input_len]),
-                u8 => conv.signedToUnsigned(@as([*]const i24, @ptrCast(input))[0..input_len], output),
-                i8, i16, i32 => conv.signedToSigned(@as([*]const i24, @ptrCast(input))[0..input_len], output),
-                f32 => conv.signedToFloat(@as([*]const i24, @ptrCast(@alignCast(input)))[0..input_len], output),
-                else => unreachable,
-            },
-            .i32 => switch (OutputType) {
-                i32 => @memcpy(output, @as([*]const i32, @ptrCast(input))[0..input_len]),
-                u8 => conv.signedToUnsigned(@as([*]const i32, @ptrCast(input))[0..input_len], output),
-                i8, i16, i24 => conv.signedToSigned(@as([*]const i32, @ptrCast(input))[0..input_len], output),
-                f32 => conv.signedToFloat(@as([*]const i32, @ptrCast(@alignCast(input)))[0..input_len], output),
-                else => unreachable,
-            },
-            .f32 => switch (OutputType) {
-                f32 => @memcpy(output, @as([*]const f32, @ptrCast(@alignCast(input)))[0..input_len]),
-                u8 => conv.floatToUnsigned(@as([*]const f32, @ptrCast(input))[0..input_len], output),
-                i8, i16, i24, i32 => conv.floatToSigned(@as([*]const f32, @ptrCast(input))[0..input_len], output),
-                else => unreachable,
-            },
-        };
-    }
 };
+
+pub fn convertTo(comptime SrcType: type, src: []const SrcType, dst_format: Format, dst: []u8) void {
+    const dst_len = dst.len / dst_format.size();
+    std.debug.assert(dst_len == src.len);
+
+    return switch (dst_format) {
+        .u8 => switch (SrcType) {
+            u8 => @memcpy(@as([*]u8, @ptrCast(dst))[0..dst_len], src),
+            i8, i16, i24, i32 => conv.signedToUnsigned(SrcType, src, u8, @as([*]u8, @ptrCast(dst))[0..dst_len]),
+            f32 => conv.floatToUnsigned(SrcType, src, u8, @as([*]u8, @ptrCast(@alignCast(dst)))[0..dst_len]),
+            else => unreachable,
+        },
+        .i16 => switch (SrcType) {
+            i16 => @memcpy(@as([*]i16, @ptrCast(dst))[0..dst_len], src),
+            u8 => conv.unsignedToSigned(SrcType, src, i16, @as([*]i16, @ptrCast(dst))[0..dst_len]),
+            i8, i24, i32 => conv.signedToSigned(SrcType, src, i16, @as([*]i16, @ptrCast(dst))[0..dst_len]),
+            f32 => conv.floatToSigned(SrcType, src, i16, @as([*]i16, @ptrCast(@alignCast(dst)))[0..dst_len]),
+            else => unreachable,
+        },
+        .i24 => switch (SrcType) {
+            i24 => @memcpy(@as([*]i24, @ptrCast(dst))[0..dst_len], src),
+            u8 => conv.unsignedToSigned(SrcType, src, i24, @as([*]i24, @ptrCast(dst))[0..dst_len]),
+            i8, i16, i32 => conv.signedToSigned(SrcType, src, i24, @as([*]i24, @ptrCast(dst))[0..dst_len]),
+            f32 => conv.floatToSigned(SrcType, src, i24, @as([*]i24, @ptrCast(@alignCast(dst)))[0..dst_len]),
+            else => unreachable,
+        },
+        .i32 => switch (SrcType) {
+            i32 => @memcpy(@as([*]i32, @ptrCast(dst))[0..dst_len], src),
+            u8 => conv.unsignedToSigned(SrcType, src, i32, @as([*]i32, @ptrCast(dst))[0..dst_len]),
+            i8, i16, i24 => conv.signedToSigned(SrcType, src, i32, @as([*]i32, @ptrCast(dst))[0..dst_len]),
+            f32 => conv.floatToSigned(SrcType, src, i32, @as([*]i32, @ptrCast(@alignCast(dst)))[0..dst_len]),
+            else => unreachable,
+        },
+        .f32 => switch (SrcType) {
+            f32 => @memcpy(@as([*]f32, @ptrCast(@alignCast(dst)))[0..dst_len], src),
+            u8 => conv.unsignedToFloat(SrcType, src, f32, @as([*]f32, @ptrCast(dst))[0..dst_len]),
+            i8, i16, i24, i32 => conv.signedToFloat(SrcType, src, f32, @as([*]f32, @ptrCast(dst))[0..dst_len]),
+            else => unreachable,
+        },
+    };
+}
+
+pub fn convertFrom(comptime DestType: type, dst: []DestType, src_format: Format, src: []const u8) void {
+    const src_len = src.len / src_format.size();
+    std.debug.assert(src_len == dst.len);
+
+    return switch (src_format) {
+        .u8 => switch (DestType) {
+            u8 => @memcpy(dst, @as([*]const u8, @ptrCast(src))[0..src_len]),
+            i8, i16, i24, i32 => conv.unsignedToSigned(u8, @as([*]const u8, @ptrCast(src))[0..src_len], DestType, dst),
+            f32 => conv.unsignedToFloat(u8, @as([*]const u8, @ptrCast(@alignCast(src)))[0..src_len], DestType, dst),
+            else => unreachable,
+        },
+        .i16 => switch (DestType) {
+            i16 => @memcpy(dst, @as([*]const i16, @ptrCast(src))[0..src_len]),
+            u8 => conv.signedToUnsigned(i16, @as([*]const i16, @ptrCast(src))[0..src_len], DestType, dst),
+            i8, i24, i32 => conv.signedToSigned(i16, @as([*]const i16, @ptrCast(src))[0..src_len], DestType, dst),
+            f32 => conv.signedToFloat(i16, @as([*]const i16, @ptrCast(@alignCast(src)))[0..src_len], DestType, dst),
+            else => unreachable,
+        },
+        .i24 => switch (DestType) {
+            i24 => @memcpy(dst, @as([*]const i24, @ptrCast(src))[0..src_len]),
+            u8 => conv.signedToUnsigned(i24, @as([*]const i24, @ptrCast(src))[0..src_len], DestType, dst),
+            i8, i16, i32 => conv.signedToSigned(i24, @as([*]const i24, @ptrCast(src))[0..src_len], DestType, dst),
+            f32 => conv.signedToFloat(i24, @as([*]const i24, @ptrCast(@alignCast(src)))[0..src_len], DestType, dst),
+            else => unreachable,
+        },
+        .i32 => switch (DestType) {
+            i32 => @memcpy(dst, @as([*]const i32, @ptrCast(src))[0..src_len]),
+            u8 => conv.signedToUnsigned(i32, @as([*]const i32, @ptrCast(src))[0..src_len], DestType, dst),
+            i8, i16, i24 => conv.signedToSigned(i32, @as([*]const i32, @ptrCast(src))[0..src_len], DestType, dst),
+            f32 => conv.signedToFloat(i32, @as([*]const i32, @ptrCast(@alignCast(src)))[0..src_len], DestType, dst),
+            else => unreachable,
+        },
+        .f32 => switch (DestType) {
+            f32 => @memcpy(dst, @as([*]const f32, @ptrCast(@alignCast(src)))[0..src_len]),
+            u8 => conv.floatToUnsigned(f32, @as([*]const f32, @ptrCast(src))[0..src_len], DestType, dst),
+            i8, i16, i24, i32 => conv.floatToSigned(f32, @as([*]const f32, @ptrCast(src))[0..src_len], DestType, dst),
+            else => unreachable,
+        },
+    };
+}
 
 pub const Device = struct {
     id: [:0]const u8,
@@ -454,17 +454,16 @@ pub const ChannelPosition = enum {
 pub const Format = enum(u3) {
     u8 = 0,
     i16 = 1,
-    i24 = 3,
-    i24_4b = 2,
-    i32 = 4,
-    f32 = 5,
+    i24 = 2,
+    i32 = 3,
+    f32 = 4,
 
     pub inline fn size(format: Format) u8 {
         return switch (format) {
             .u8 => 1,
             .i16 => 2,
             .i24 => 3,
-            .i24_4b, .i32, .f32 => 4,
+            .i32, .f32 => 4,
         };
     }
 
@@ -472,7 +471,7 @@ pub const Format = enum(u3) {
         return switch (format) {
             .u8 => 1,
             .i16 => 2,
-            .i24, .i24_4b => 3,
+            .i24 => 3,
             .i32, .f32 => 4,
         };
     }
@@ -485,21 +484,14 @@ pub const Format = enum(u3) {
         return format.validSize() * 8;
     }
 
-    pub inline fn validRange(format: Format) Range(i32) {
-        return switch (format) {
-            .u8 => .{ .min = std.math.minInt(u8), .max = std.math.maxInt(u8) },
-            .i16 => .{ .min = std.math.minInt(i16), .max = std.math.maxInt(i16) },
-            .i24, .i24_4b => .{ .min = std.math.minInt(i24), .max = std.math.maxInt(i24) },
-            .i32 => .{ .min = std.math.minInt(i32), .max = std.math.maxInt(i32) },
-            .f32 => .{ .min = -1, .max = 1 },
-        };
-    }
-
     pub inline fn frameSize(format: Format, channels: u8) u8 {
         return format.size() * channels;
     }
 };
 
 test "reference declarations" {
-    std.testing.refAllDeclsRecursive(@This());
+    _ = conv;
+    _ = backends.Context;
+    _ = backends.Player;
+    _ = backends.Recorder;
 }

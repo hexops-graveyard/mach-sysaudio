@@ -371,7 +371,7 @@ pub const Context = struct {
 
     fn setWaveFormatFormat(wf: *win32.WAVEFORMATEXTENSIBLE, format: main.Format) void {
         switch (format) {
-            .u8, .i16, .i24, .i24_4b, .i32 => {
+            .u8, .i16, .i24, .i32 => {
                 wf.SubFormat = win32.CLSID_KSDATAFORMAT_SUBTYPE_PCM.*;
             },
             .f32 => {
@@ -674,7 +674,6 @@ pub const Context = struct {
             .u8,
             .i16,
             .i24,
-            .i24_4b,
             .i32,
             => win32.CLSID_KSDATAFORMAT_SUBTYPE_PCM.*,
             .f32 => win32.CLSID_KSDATAFORMAT_SUBTYPE_IEEE_FLOAT.*,
@@ -1039,8 +1038,4 @@ pub fn freeDevice(allocator: std.mem.Allocator, device: main.Device) void {
     allocator.free(device.name);
     allocator.free(device.formats);
     allocator.free(device.channels);
-}
-
-test "reference declarations" {
-    std.testing.refAllDeclsRecursive(@This());
 }

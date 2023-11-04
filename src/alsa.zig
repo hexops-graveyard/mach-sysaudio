@@ -778,7 +778,6 @@ pub fn toAlsaFormat(format: main.Format) c.snd_pcm_format_t {
         .u8 => c.SND_PCM_FORMAT_U8,
         .i16 => if (is_little) c.SND_PCM_FORMAT_S16_LE else c.SND_PCM_FORMAT_S16_BE,
         .i24 => if (is_little) c.SND_PCM_FORMAT_S24_3LE else c.SND_PCM_FORMAT_S24_3BE,
-        .i24_4b => if (is_little) c.SND_PCM_FORMAT_S24_LE else c.SND_PCM_FORMAT_S24_BE,
         .i32 => if (is_little) c.SND_PCM_FORMAT_S32_LE else c.SND_PCM_FORMAT_S32_BE,
         .f32 => if (is_little) c.SND_PCM_FORMAT_FLOAT_LE else c.SND_PCM_FORMAT_FLOAT_BE,
     };
@@ -831,8 +830,4 @@ pub fn toCHMAP(pos: main.ChannelPosition) c_uint {
         .top_back_right => c.SND_CHMAP_TRR,
         .top_back_center => c.SND_CHMAP_TRC,
     };
-}
-
-test "reference declarations" {
-    std.testing.refAllDeclsRecursive(@This());
 }
