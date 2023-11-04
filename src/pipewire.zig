@@ -523,7 +523,3 @@ fn freeDevice(allocator: std.mem.Allocator, device: main.Device) void {
 }
 
 extern fn sysaudio_spa_format_audio_raw_build(builder: [*c]c.spa_pod_builder, id: u32, info: [*c]c.spa_audio_info_raw) callconv(.C) [*c]c.spa_pod;
-
-test "reference declarations" {
-    std.testing.refAllDeclsRecursive(@This());
-}

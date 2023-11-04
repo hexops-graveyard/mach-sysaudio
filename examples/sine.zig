@@ -61,7 +61,12 @@ fn writeCallback(_: ?*anyopaque, output: []u8) void {
     while (i < output.len) : (i += frame_size) {
         const frame_index: f32 = @floatFromInt(i / frame_size);
         const sample = @sin((seconds_offset + frame_index * seconds_per_frame) * radians_per_second);
-        player.write(f32, &.{ sample, sample }, output[i..][0..frame_size]);
+        sysaudio.convertTo(
+            f32,
+            &.{ sample, sample },
+            player.format(),
+            output[i..][0..frame_size],
+        );
     }
 
     seconds_offset = @mod(seconds_offset + seconds_per_frame * @as(f32, @floatFromInt(frames)), 1.0);

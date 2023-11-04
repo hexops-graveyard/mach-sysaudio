@@ -4,14 +4,11 @@ const shr = std.math.shr;
 const maxInt = std.math.maxInt;
 const clamp = std.math.clamp;
 
-pub inline fn unsignedToSigned(in: anytype, out: anytype) void {
-    const InputType = std.meta.Child(@TypeOf(in));
-    const OutputType = std.meta.Child(@TypeOf(out));
-
-    for (in, out) |*in_sample, *out_sample| {
-        const half = 1 << (@bitSizeOf(InputType) - 1);
-        const trunc = @bitSizeOf(OutputType) - @bitSizeOf(InputType);
-        out_sample.* = @as(OutputType, @intCast(in_sample.* -% half)) << trunc;
+pub inline fn unsignedToSigned(comptime SrcType: type, src: []const SrcType, comptime DestType: type, dst: []DestType) void {
+    for (src, dst) |*in_sample, *out_sample| {
+        const half = 1 << (@bitSizeOf(SrcType) - 1);
+        const trunc = @bitSizeOf(DestType) - @bitSizeOf(SrcType);
+        out_sample.* = @as(DestType, @intCast(in_sample.* -% half)) << trunc;
     }
 }
 
@@ -29,13 +26,10 @@ test unsignedToSigned {
     try expectEqual(@as(i32, -2063597568), u8_to_i32[0]);
 }
 
-pub inline fn unsignedToFloat(in: anytype, out: anytype) void {
-    const InputType = std.meta.Child(@TypeOf(in));
-    const OutputType = std.meta.Child(@TypeOf(out));
-
-    for (in, out) |*in_sample, *out_sample| {
-        const half = (1 << @typeInfo(InputType).Int.bits) / 2;
-        out_sample.* = (@as(OutputType, @floatFromInt(in_sample.*)) - half) * 1.0 / half;
+pub inline fn unsignedToFloat(comptime SrcType: type, src: []const SrcType, comptime DestType: type, dst: []DestType) void {
+    for (src, dst) |*in_sample, *out_sample| {
+        const half = (1 << @typeInfo(SrcType).Int.bits) / 2;
+        out_sample.* = (@as(DestType, @floatFromInt(in_sample.*)) - half) * 1.0 / half;
     }
 }
 
@@ -45,13 +39,10 @@ test unsignedToFloat {
     try expectEqual(@as(f32, -0.9609375), u8_to_f32[0]);
 }
 
-pub inline fn signedToUnsigned(in: anytype, out: anytype) void {
-    const InputType = std.meta.Child(@TypeOf(in));
-    const OutputType = std.meta.Child(@TypeOf(out));
-
-    for (in, out) |*in_sample, *out_sample| {
-        const half = 1 << @bitSizeOf(OutputType) - 1;
-        const trunc = @bitSizeOf(InputType) - @bitSizeOf(OutputType);
+pub inline fn signedToUnsigned(comptime SrcType: type, src: []const SrcType, comptime DestType: type, dst: []DestType) void {
+    for (src, dst) |*in_sample, *out_sample| {
+        const half = 1 << @bitSizeOf(DestType) - 1;
+        const trunc = @bitSizeOf(SrcType) - @bitSizeOf(DestType);
         out_sample.* = @intCast((in_sample.* >> trunc) + half);
     }
 }
@@ -70,13 +61,10 @@ test signedToUnsigned {
     try expectEqual(@as(u8, 128), i32_to_u8[0]);
 }
 
-pub inline fn signedToSigned(in: anytype, out: anytype) void {
-    const InputType = std.meta.Child(@TypeOf(in));
-    const OutputType = std.meta.Child(@TypeOf(out));
-
-    for (in, out) |*in_sample, *out_sample| {
-        const trunc = @bitSizeOf(InputType) - @bitSizeOf(OutputType);
-        out_sample.* = shr(OutputType, @intCast(in_sample.*), trunc);
+pub inline fn signedToSigned(comptime SrcType: type, src: []const SrcType, comptime DestType: type, dst: []DestType) void {
+    for (src, dst) |*in_sample, *out_sample| {
+        const trunc = @bitSizeOf(SrcType) - @bitSizeOf(DestType);
+        out_sample.* = shr(DestType, @intCast(in_sample.*), trunc);
     }
 }
 
@@ -100,22 +88,17 @@ test signedToSigned {
     try expectEqual(@as(i24, 1280), i16_to_i24[0]);
     try expectEqual(@as(i32, 327680), i16_to_i32[0]);
 
-    // TODO: correctness
-    // try expectEqual(@as(i16, 0), i24_to_i16[0]);
+    try expectEqual(@as(i16, 0), i24_to_i16[0]);
     try expectEqual(@as(i32, 1280), i24_to_i32[0]);
 
-    // TODO
-    // try expectEqual(@as(i16, 0), i32_to_i16[0]);
-    // try expectEqual(@as(i24, 0), i32_to_i24[0]);
+    try expectEqual(@as(i16, 0), i32_to_i16[0]);
+    try expectEqual(@as(i24, 0), i32_to_i24[0]);
 }
 
-pub inline fn signedToFloat(in: anytype, out: anytype) void {
-    const InputType = std.meta.Child(@TypeOf(in));
-    const OutputType = std.meta.Child(@TypeOf(out));
-
-    for (in, out) |*in_sample, *out_sample| {
-        const max: f32 = maxInt(InputType) + 1;
-        out_sample.* = @as(OutputType, @floatFromInt(in_sample.*)) * (1.0 / max);
+pub inline fn signedToFloat(comptime SrcType: type, src: []const SrcType, comptime DestType: type, dst: []DestType) void {
+    for (src, dst) |*in_sample, *out_sample| {
+        const max: comptime_float = maxInt(SrcType) + 1;
+        out_sample.* = @as(DestType, @floatFromInt(in_sample.*)) * (1.0 / max);
     }
 }
 
@@ -130,16 +113,13 @@ test signedToFloat {
 
     try expectEqual(@as(f32, 1.52587890625e-4), i16_to_f32[0]);
     try expectEqual(@as(f32, 5.9604644775391e-7), i24_to_f32[0]);
-    // TODO
-    // try expectEqual(@as(f32, 0), i32_to_f32[0]);
+    try expectEqual(@as(f32, 2.32830643e-09), i32_to_f32[0]);
 }
 
-pub inline fn floatToUnsigned(in: anytype, out: anytype) void {
-    const OutputType = std.meta.Child(@TypeOf(out));
-
-    for (in, out) |*in_sample, *out_sample| {
-        const half = maxInt(OutputType) / 2;
-        out_sample.* = @intFromFloat(clamp((in_sample.* * half) + (half + 1), 0, maxInt(OutputType)));
+pub inline fn floatToUnsigned(comptime SrcType: type, src: []const SrcType, comptime DestType: type, dst: []DestType) void {
+    for (src, dst) |*in_sample, *out_sample| {
+        const half = maxInt(DestType) / 2;
+        out_sample.* = @intFromFloat(clamp((in_sample.* * half) + (half + 1), 0, maxInt(DestType)));
     }
 }
 
@@ -149,11 +129,9 @@ test floatToUnsigned {
     try expectEqual(@as(u8, 191), f32_to_u8[0]);
 }
 
-pub inline fn floatToSigned(in: anytype, out: anytype) void {
-    const OutputType = std.meta.Child(@TypeOf(out));
-
-    for (in, out) |*in_sample, *out_sample| {
-        const max = maxInt(OutputType);
+pub inline fn floatToSigned(comptime SrcType: type, src: []const SrcType, comptime DestType: type, dst: []DestType) void {
+    for (src, dst) |*in_sample, *out_sample| {
+        const max = maxInt(DestType);
         out_sample.* = @truncate(@as(i32, @intFromFloat(in_sample.* * max)));
     }
 }

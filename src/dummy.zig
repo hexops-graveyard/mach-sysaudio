@@ -185,7 +185,3 @@ pub const Recorder = struct {
 fn freeDevice(allocator: std.mem.Allocator, device: main.Device) void {
     allocator.free(device.channels);
 }
-
-test "reference declarations" {
-    std.testing.refAllDeclsRecursive(@This());
-}

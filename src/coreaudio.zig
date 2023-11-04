@@ -714,7 +714,6 @@ fn createStreamDesc(format: main.Format, sample_rate: u24, ch_count: usize) !c.A
             .i32 => c.kAudioFormatFlagIsSignedInteger,
             .f32 => c.kAudioFormatFlagIsFloat,
             .u8 => return error.IncompatibleDevice,
-            .i24_4b => return error.IncompatibleDevice,
         },
         .mBytesPerPacket = format.frameSize(@intCast(ch_count)),
         .mFramesPerPacket = 1,
@@ -726,7 +725,6 @@ fn createStreamDesc(format: main.Format, sample_rate: u24, ch_count: usize) !c.A
             .i32 => 32,
             .f32 => 32,
             .u8 => unreachable,
-            .i24_4b => unreachable,
         },
         .mReserved = 0,
     };
@@ -736,8 +734,4 @@ fn createStreamDesc(format: main.Format, sample_rate: u24, ch_count: usize) !c.A
     }
 
     return desc;
-}
-
-test "reference declarations" {
-    std.testing.refAllDeclsRecursive(@This());
 }
