@@ -8,8 +8,8 @@ pub const Guid = extern union {
     },
     Bytes: [16]u8,
     const hex_offsets = switch (@import("builtin").target.cpu.arch.endian()) {
-        .Big => [16]u6{ 0, 2, 4, 6, 9, 11, 14, 16, 19, 21, 24, 26, 28, 30, 32, 34 },
-        .Little => [16]u6{ 6, 4, 2, 0, 11, 9, 16, 14, 19, 21, 24, 26, 28, 30, 32, 34 },
+        .big => [16]u6{ 0, 2, 4, 6, 9, 11, 14, 16, 19, 21, 24, 26, 28, 30, 32, 34 },
+        .little => [16]u6{ 6, 4, 2, 0, 11, 9, 16, 14, 19, 21, 24, 26, 28, 30, 32, 34 },
     };
     pub fn initString(s: []const u8) Guid {
         var guid = Guid{ .Bytes = undefined };
