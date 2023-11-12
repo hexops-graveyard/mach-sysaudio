@@ -82,11 +82,12 @@ pub fn signedToSigned(
     comptime DestType: type,
     dst: []DestType,
 ) void {
-    if (std.simd.suggestVectorSize(SrcType)) |_| {
-        signedToSignedSIMD(SrcType, src, DestType, dst);
-    } else {
-        signedToSignedScalar(SrcType, src, DestType, dst);
-    }
+    // TODO: Uncomment this (zig crashes)
+    // if (std.simd.suggestVectorSize(SrcType)) |_| {
+    //     signedToSignedSIMD(SrcType, src, DestType, dst);
+    // } else {
+    signedToSignedScalar(SrcType, src, DestType, dst);
+    // }
 }
 
 pub fn signedToSignedScalar(
