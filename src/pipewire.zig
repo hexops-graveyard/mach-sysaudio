@@ -390,7 +390,7 @@ pub const Player = struct {
     pub fn processCb(player_opaque: ?*anyopaque) callconv(.C) void {
         var player = @as(*Player, @ptrCast(@alignCast(player_opaque.?)));
 
-        const buf = lib.pw_stream_dequeue_buffer(player.stream) orelse unreachable;
+        const buf = lib.pw_stream_dequeue_buffer(player.stream) orelse return;
         if (buf.*.buffer.*.datas[0].data == null) return;
         defer _ = lib.pw_stream_queue_buffer(player.stream, buf);
 
@@ -465,7 +465,7 @@ pub const Recorder = struct {
     pub fn processCb(recorder_opaque: ?*anyopaque) callconv(.C) void {
         var recorder = @as(*Recorder, @ptrCast(@alignCast(recorder_opaque.?)));
 
-        const buf = lib.pw_stream_dequeue_buffer(recorder.stream) orelse unreachable;
+        const buf = lib.pw_stream_dequeue_buffer(recorder.stream) orelse return;
         if (buf.*.buffer.*.datas[0].data == null) return;
         defer _ = lib.pw_stream_queue_buffer(recorder.stream, buf);
 

@@ -25,9 +25,9 @@ pub const Context = struct {
             win32.S_FALSE,
             win32.RPC_E_CHANGED_MODE,
             => {},
-            win32.E_INVALIDARG => unreachable,
             win32.E_OUTOFMEMORY => return error.OutOfMemory,
             win32.E_UNEXPECTED => return error.SystemResources,
+            win32.E_INVALIDARG => unreachable,
             else => unreachable,
         }
 
@@ -223,118 +223,131 @@ pub const Context = struct {
             );
             defer win32.CoTaskMemFree(variant.anon.anon.anon.blob.pBlobData);
 
-            var device = main.Device{
-                .mode = blk: {
-                    var endpoint: ?*win32.IMMEndpoint = null;
-                    hr = imm_device.?.QueryInterface(win32.IID_IMMEndpoint, @as(?*?*anyopaque, @ptrCast(&endpoint)));
-                    switch (hr) {
-                        win32.S_OK => {},
-                        win32.E_POINTER => unreachable,
-                        win32.E_NOINTERFACE => unreachable,
-                        else => unreachable,
-                    }
-                    defer _ = endpoint.?.Release();
-
-                    var dataflow: win32.DataFlow = undefined;
-                    hr = endpoint.?.GetDataFlow(&dataflow);
-                    switch (hr) {
-                        win32.S_OK => {},
-                        win32.E_POINTER => unreachable,
-                        else => return error.OpeningDevice,
-                    }
-
-                    break :blk switch (dataflow) {
-                        .render => .playback,
-                        .capture => .capture,
-                        else => unreachable,
-                    };
-                },
-                .channels = blk: {
-                    var chn_arr = std.ArrayList(main.ChannelPosition).init(ctx.allocator);
-                    var channel: u32 = win32.SPEAKER_FRONT_LEFT;
-                    while (channel < win32.SPEAKER_ALL) : (channel <<= 1) {
-                        if (wf.dwChannelMask & channel != 0) try chn_arr.append(fromWASApiChannel(channel));
-                    }
-                    break :blk try chn_arr.toOwnedSlice();
-                },
-                .sample_rate = .{
-                    .min = @as(u24, @intCast(wf.Format.nSamplesPerSec)),
-                    .max = @as(u24, @intCast(wf.Format.nSamplesPerSec)),
-                },
-                .formats = blk: {
-                    var audio_client: ?*win32.IAudioClient = null;
-                    hr = imm_device.?.Activate(win32.IID_IAudioClient, win32.CLSCTX_ALL, null, @as(?*?*anyopaque, @ptrCast(&audio_client)));
-                    switch (hr) {
-                        win32.S_OK => {},
-                        win32.E_POINTER => unreachable,
-                        win32.E_INVALIDARG => unreachable,
-                        win32.E_NOINTERFACE => unreachable,
-                        win32.E_OUTOFMEMORY => return error.OutOfMemory,
-                        win32.AUDCLNT_E_DEVICE_INVALIDATED => unreachable,
-                        else => return error.OpeningDevice,
-                    }
-
-                    var fmt_arr = std.ArrayList(main.Format).init(ctx.allocator);
-                    var closest_match: ?*win32.WAVEFORMATEX = null;
-                    for (std.meta.tags(main.Format)) |format| {
-                        setWaveFormatFormat(wf, format);
-                        if (audio_client.?.IsFormatSupported(
-                            .SHARED,
-                            @as(?*const win32.WAVEFORMATEX, @ptrCast(@alignCast(wf))),
-                            &closest_match,
-                        ) == win32.S_OK) {
-                            try fmt_arr.append(format);
-                        }
-                    }
-
-                    break :blk try fmt_arr.toOwnedSlice();
-                },
-                .id = blk: {
-                    var id_u16: ?[*:0]u16 = undefined;
-                    hr = imm_device.?.GetId(&id_u16);
-                    switch (hr) {
-                        win32.S_OK => {},
-                        win32.E_POINTER => unreachable,
-                        win32.E_OUTOFMEMORY => return error.OutOfMemory,
-                        else => return error.OpeningDevice,
-                    }
-                    defer win32.CoTaskMemFree(id_u16);
-
-                    break :blk std.unicode.utf16leToUtf8AllocZ(ctx.allocator, std.mem.span(id_u16.?)) catch |err| switch (err) {
-                        error.OutOfMemory => return error.OutOfMemory,
-                        else => unreachable,
-                    };
-                },
-                .name = blk: {
-                    hr = property_store.?.GetValue(&win32.PKEY_Device_FriendlyName, &variant);
-                    switch (hr) {
-                        win32.S_OK, win32.INPLACE_S_TRUNCATED => {},
-                        else => return error.OpeningDevice,
-                    }
-                    defer win32.CoTaskMemFree(variant.anon.anon.anon.pwszVal);
-
-                    break :blk std.unicode.utf16leToUtf8AllocZ(
-                        ctx.allocator,
-                        std.mem.span(variant.anon.anon.anon.pwszVal.?),
-                    ) catch |err| switch (err) {
-                        error.OutOfMemory => return error.OutOfMemory,
-                        else => unreachable,
-                    };
-                },
+            const channels = blk: {
+                var chn_arr = std.ArrayList(main.ChannelPosition).init(ctx.allocator);
+                var channel: u32 = win32.SPEAKER_FRONT_LEFT;
+                while (channel < win32.SPEAKER_ALL) : (channel <<= 1) {
+                    if (wf.dwChannelMask & channel != 0) try chn_arr.append(fromWASApiChannel(channel));
+                }
+                break :blk try chn_arr.toOwnedSlice();
             };
 
-            try ctx.devices_info.list.append(ctx.allocator, device);
-            switch (device.mode) {
-                .playback => if (default_playback_id) |id| {
-                    if (std.mem.eql(u8, device.id, id)) {
-                        ctx.devices_info.setDefault(.playback, ctx.devices_info.list.items.len - 1);
+            const sample_rate = util.Range(u24){
+                .min = @intCast(wf.Format.nSamplesPerSec),
+                .max = @intCast(wf.Format.nSamplesPerSec),
+            };
+
+            const formats = blk: {
+                var audio_client: ?*win32.IAudioClient = null;
+                hr = imm_device.?.Activate(win32.IID_IAudioClient, win32.CLSCTX_ALL, null, @as(?*?*anyopaque, @ptrCast(&audio_client)));
+                switch (hr) {
+                    win32.S_OK => {},
+                    win32.E_POINTER => unreachable,
+                    win32.E_INVALIDARG => unreachable,
+                    win32.E_NOINTERFACE => unreachable,
+                    win32.E_OUTOFMEMORY => return error.OutOfMemory,
+                    win32.AUDCLNT_E_DEVICE_INVALIDATED => unreachable,
+                    else => return error.OpeningDevice,
+                }
+
+                var fmt_arr = std.ArrayList(main.Format).init(ctx.allocator);
+                var closest_match: ?*win32.WAVEFORMATEX = null;
+                for (std.meta.tags(main.Format)) |format| {
+                    setWaveFormatFormat(wf, format);
+                    if (audio_client.?.IsFormatSupported(
+                        .SHARED,
+                        @as(?*const win32.WAVEFORMATEX, @ptrCast(@alignCast(wf))),
+                        &closest_match,
+                    ) == win32.S_OK) {
+                        try fmt_arr.append(format);
                     }
-                },
-                .capture => if (default_capture_id) |id| {
-                    if (std.mem.eql(u8, device.id, id)) {
-                        ctx.devices_info.setDefault(.capture, ctx.devices_info.list.items.len - 1);
-                    }
-                },
+                }
+
+                break :blk try fmt_arr.toOwnedSlice();
+            };
+
+            const id = blk: {
+                var id_u16: ?[*:0]u16 = undefined;
+                hr = imm_device.?.GetId(&id_u16);
+                switch (hr) {
+                    win32.S_OK => {},
+                    win32.E_POINTER => unreachable,
+                    win32.E_OUTOFMEMORY => return error.OutOfMemory,
+                    else => return error.OpeningDevice,
+                }
+                defer win32.CoTaskMemFree(id_u16);
+
+                break :blk std.unicode.utf16leToUtf8AllocZ(ctx.allocator, std.mem.span(id_u16.?)) catch |err| switch (err) {
+                    error.OutOfMemory => return error.OutOfMemory,
+                    else => return error.OpeningDevice,
+                };
+            };
+
+            const name = blk: {
+                hr = property_store.?.GetValue(&win32.PKEY_Device_FriendlyName, &variant);
+                switch (hr) {
+                    win32.S_OK, win32.INPLACE_S_TRUNCATED => {},
+                    else => return error.OpeningDevice,
+                }
+                defer win32.CoTaskMemFree(variant.anon.anon.anon.pwszVal);
+
+                break :blk std.unicode.utf16leToUtf8AllocZ(
+                    ctx.allocator,
+                    std.mem.span(variant.anon.anon.anon.pwszVal.?),
+                ) catch |err| switch (err) {
+                    error.OutOfMemory => return error.OutOfMemory,
+                    else => return error.OpeningDevice,
+                };
+            };
+
+            const dataflow = blk: {
+                var endpoint: ?*win32.IMMEndpoint = null;
+                hr = imm_device.?.QueryInterface(win32.IID_IMMEndpoint, @as(?*?*anyopaque, @ptrCast(&endpoint)));
+                switch (hr) {
+                    win32.S_OK => {},
+                    win32.E_POINTER => unreachable,
+                    win32.E_NOINTERFACE => unreachable,
+                    else => unreachable,
+                }
+                defer _ = endpoint.?.Release();
+
+                var dataflow: win32.DataFlow = undefined;
+                hr = endpoint.?.GetDataFlow(&dataflow);
+                switch (hr) {
+                    win32.S_OK => {},
+                    win32.E_POINTER => unreachable,
+                    else => return error.OpeningDevice,
+                }
+                break :blk dataflow;
+            };
+
+            const modes: []const main.Device.Mode = switch (dataflow) {
+                .render => &.{.playback},
+                .capture => &.{.capture},
+                .all => &.{ .playback, .capture },
+            };
+
+            for (modes) |mode| {
+                try ctx.devices_info.list.append(ctx.allocator, .{
+                    .mode = mode,
+                    .channels = channels,
+                    .sample_rate = sample_rate,
+                    .formats = formats,
+                    .id = id,
+                    .name = name,
+                });
+                switch (mode) {
+                    .playback => if (default_playback_id) |default_id| {
+                        if (std.mem.eql(u8, id, default_id)) {
+                            ctx.devices_info.setDefault(.playback, ctx.devices_info.list.items.len - 1);
+                        }
+                    },
+                    .capture => if (default_capture_id) |default_id| {
+                        if (std.mem.eql(u8, id, default_id)) {
+                            ctx.devices_info.setDefault(.capture, ctx.devices_info.list.items.len - 1);
+                        }
+                    },
+                }
             }
         }
     }
@@ -413,7 +426,7 @@ pub const Context = struct {
 
         return std.unicode.utf16leToUtf8AllocZ(ctx.allocator, std.mem.span(default_playback_id_u16.?)) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
-            else => unreachable,
+            else => return error.OpeningDevice,
         };
     }
 
@@ -457,7 +470,7 @@ pub const Context = struct {
                 win32.E_INVALIDARG => unreachable,
                 win32.E_NOINTERFACE => unreachable,
                 win32.E_OUTOFMEMORY => return error.OutOfMemory,
-                win32.AUDCLNT_E_DEVICE_INVALIDATED => unreachable,
+                win32.AUDCLNT_E_DEVICE_INVALIDATED => return error.OpeningDevice,
                 else => return error.OpeningDevice,
             }
         }
@@ -540,8 +553,8 @@ pub const Context = struct {
             win32.S_OK => {},
             win32.E_POINTER => unreachable,
             win32.AUDCLNT_E_NOT_INITIALIZED => unreachable,
-            win32.AUDCLNT_E_DEVICE_INVALIDATED => return,
-            win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return,
+            win32.AUDCLNT_E_DEVICE_INVALIDATED => return error.OpeningDevice,
+            win32.AUDCLNT_E_SERVICE_NOT_RUNNING => return error.OpeningDevice,
             else => unreachable,
         }
     }
@@ -745,9 +758,9 @@ pub const Player = struct {
             error.ThreadQuotaExceeded,
             error.SystemResources,
             error.LockedMemoryLimitExceeded,
+            error.Unexpected,
             => return error.SystemResources,
             error.OutOfMemory => return error.OutOfMemory,
-            error.Unexpected => unreachable,
         };
     }
 
@@ -907,9 +920,9 @@ pub const Recorder = struct {
             error.ThreadQuotaExceeded,
             error.SystemResources,
             error.LockedMemoryLimitExceeded,
+            error.Unexpected,
             => return error.SystemResources,
             error.OutOfMemory => return error.OutOfMemory,
-            error.Unexpected => unreachable,
         };
     }
 

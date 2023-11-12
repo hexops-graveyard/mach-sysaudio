@@ -4,7 +4,7 @@ const main = @import("main.zig");
 const backends = @import("backends.zig");
 const util = @import("util.zig");
 const inotify_event = std.os.linux.inotify_event;
-const is_little = @import("builtin").cpu.arch.endian() == .Little;
+const is_little = @import("builtin").cpu.arch.endian() == .little;
 
 const default_sample_rate = 44_100; // Hz
 
