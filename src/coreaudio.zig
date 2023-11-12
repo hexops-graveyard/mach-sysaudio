@@ -268,7 +268,7 @@ pub const Context = struct {
         if (c.AudioUnitInitialize(audio_unit) != c.noErr) return error.OpeningDevice;
         errdefer _ = c.AudioUnitUninitialize(audio_unit);
 
-        const device_id = std.fmt.parseInt(c.AudioDeviceID, device.id, 10) catch unreachable;
+        const device_id = std.fmt.parseInt(c.AudioDeviceID, device.id, 10) catch return error.OpeningDevice;
         if (c.AudioUnitSetProperty(
             audio_unit,
             c.kAudioOutputUnitProperty_CurrentDevice,
@@ -325,7 +325,7 @@ pub const Context = struct {
         var recorder = try ctx.allocator.create(Recorder);
         errdefer ctx.allocator.destroy(recorder);
 
-        const device_id = std.fmt.parseInt(c.AudioDeviceID, device.id, 10) catch unreachable;
+        const device_id = std.fmt.parseInt(c.AudioDeviceID, device.id, 10) catch return error.OpeningDevice;
         var io_size: u32 = 0;
         var prop_address = c.AudioObjectPropertyAddress{
             .mSelector = c.kAudioDevicePropertyStreamConfiguration,
@@ -724,7 +724,7 @@ fn createStreamDesc(format: main.Format, sample_rate: u24, ch_count: usize) !c.A
             .i24 => 24,
             .i32 => 32,
             .f32 => 32,
-            .u8 => unreachable,
+            .u8 => return error.IncompatibleDevice,
         },
         .mReserved = 0,
     };

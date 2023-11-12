@@ -52,8 +52,8 @@ pub fn main() !void {
 
 fn readCallback(_: ?*anyopaque, input: []const u8) void {
     const format_size = recorder.format().size();
-    const frames = input.len / format_size;
+    const samples = input.len / format_size;
     var buffer: [16 * 1024]f32 = undefined;
-    sysaudio.convertFrom(f32, buffer[0..frames], recorder.format(), input);
+    sysaudio.convertFrom(f32, buffer[0..samples], recorder.format(), input);
     _ = file.write(std.mem.sliceAsBytes(buffer[0 .. input.len / format_size])) catch {};
 }

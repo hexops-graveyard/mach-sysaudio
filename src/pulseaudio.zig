@@ -3,7 +3,7 @@ const c = @cImport(@cInclude("pulse/pulseaudio.h"));
 const main = @import("main.zig");
 const backends = @import("backends.zig");
 const util = @import("util.zig");
-const is_little = @import("builtin").cpu.arch.endian() == .Little;
+const is_little = @import("builtin").cpu.arch.endian() == .little;
 
 var lib: Lib = undefined;
 const Lib = struct {
@@ -263,8 +263,7 @@ pub const Context = struct {
             .mode = mode,
             .channels = blk: {
                 var channels = try ctx.allocator.alloc(main.ChannelPosition, info.*.channel_map.channels);
-                for (channels, 0..) |*ch, i|
-                    ch.* = fromPAChannelPos(info.*.channel_map.map[i]) catch unreachable;
+                for (channels, 0..) |*ch, i| ch.* = try fromPAChannelPos(info.*.channel_map.map[i]);
                 break :blk channels;
             },
             .formats = available_formats,
@@ -432,8 +431,7 @@ pub const Context = struct {
     };
 
     fn streamStateOp(stream: ?*c.pa_stream, stream_status_opaque: ?*anyopaque) callconv(.C) void {
-        var stream_status = @as(*StreamStatus, @ptrCast(@alignCast(stream_status_opaque.?)));
-
+        const stream_status = @as(*StreamStatus, @ptrCast(@alignCast(stream_status_opaque.?)));
         switch (lib.pa_stream_get_state(stream)) {
             c.PA_STREAM_UNCONNECTED,
             c.PA_STREAM_CREATING,
@@ -500,17 +498,18 @@ pub const Player = struct {
                 @ptrCast(@alignCast(&player.write_ptr)),
             ),
             &frames_left,
-        ) != 0) {
-            if (std.debug.runtime_safety) unreachable;
-            return;
-        }
+        ) != 0) return;
 
         player.writeFn(player.user_data, player.write_ptr[0..frames_left]);
 
-        if (lib.pa_stream_write(stream, player.write_ptr, frames_left, null, 0, c.PA_SEEK_RELATIVE) != 0) {
-            if (std.debug.runtime_safety) unreachable;
-            return;
-        }
+        if (lib.pa_stream_write(
+            stream,
+            player.write_ptr,
+            frames_left,
+            null,
+            0,
+            c.PA_SEEK_RELATIVE,
+        ) != 0) return;
     }
 
     pub fn play(player: *Player) !void {
@@ -733,11 +732,7 @@ fn performOperation(main_loop: *c.pa_threaded_mainloop, op: ?*c.pa_operation) vo
         switch (lib.pa_operation_get_state(op)) {
             c.PA_OPERATION_RUNNING => lib.pa_threaded_mainloop_wait(main_loop),
             c.PA_OPERATION_DONE => return lib.pa_operation_unref(op),
-            c.PA_OPERATION_CANCELLED => {
-                std.debug.assert(false);
-                lib.pa_operation_unref(op);
-                return;
-            },
+            c.PA_OPERATION_CANCELLED => return lib.pa_operation_unref(op),
             else => unreachable,
         }
     }
