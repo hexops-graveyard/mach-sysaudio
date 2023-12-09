@@ -160,7 +160,9 @@ pub const Context = struct {
     pub fn refresh(ctx: *Context) !void {
         // get default devices id
         const default_playback_id = try ctx.getDefaultAudioEndpoint(.playback);
+        defer ctx.allocator.free(default_playback_id.?);
         const default_capture_id = try ctx.getDefaultAudioEndpoint(.capture);
+        defer ctx.allocator.free(default_capture_id.?);
 
         // enumerate
         var collection: ?*win32.IMMDeviceCollection = null;
