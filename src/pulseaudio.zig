@@ -89,13 +89,13 @@ pub const Context = struct {
         const main_loop = lib.pa_threaded_mainloop_new() orelse
             return error.OutOfMemory;
         errdefer lib.pa_threaded_mainloop_free(main_loop);
-        var main_loop_api = lib.pa_threaded_mainloop_get_api(main_loop);
+        const main_loop_api = lib.pa_threaded_mainloop_get_api(main_loop);
 
         const pulse_ctx = lib.pa_context_new_with_proplist(main_loop_api, options.app_name.ptr, null) orelse
             return error.OutOfMemory;
         errdefer lib.pa_context_unref(pulse_ctx);
 
-        var ctx = try allocator.create(Context);
+        const ctx = try allocator.create(Context);
         errdefer allocator.destroy(ctx);
         ctx.* = Context{
             .allocator = allocator,
@@ -256,15 +256,15 @@ pub const Context = struct {
     }
 
     fn deviceInfoOp(ctx: *Context, info: anytype, mode: main.Device.Mode) !void {
-        var id = try ctx.allocator.dupeZ(u8, std.mem.span(info.*.name));
+        const id = try ctx.allocator.dupeZ(u8, std.mem.span(info.*.name));
         errdefer ctx.allocator.free(id);
-        var name = try ctx.allocator.dupeZ(u8, std.mem.span(info.*.description));
+        const name = try ctx.allocator.dupeZ(u8, std.mem.span(info.*.description));
         errdefer ctx.allocator.free(name);
 
-        var device = main.Device{
+        const device = main.Device{
             .mode = mode,
             .channels = blk: {
-                var channels = try ctx.allocator.alloc(main.ChannelPosition, info.*.channel_map.channels);
+                const channels = try ctx.allocator.alloc(main.ChannelPosition, info.*.channel_map.channels);
                 for (channels, 0..) |*ch, i| ch.* = try fromPAChannelPos(info.*.channel_map.map[i]);
                 break :blk channels;
             },
@@ -303,7 +303,7 @@ pub const Context = struct {
 
         const channel_map = try toPAChannelMap(device.channels);
 
-        var stream = lib.pa_stream_new(ctx.pulse_ctx, ctx.app_name.ptr, &sample_spec, &channel_map);
+        const stream = lib.pa_stream_new(ctx.pulse_ctx, ctx.app_name.ptr, &sample_spec, &channel_map);
         if (stream == null)
             return error.OutOfMemory;
         errdefer lib.pa_stream_unref(stream);
@@ -338,7 +338,7 @@ pub const Context = struct {
             }
         }
 
-        var player = try ctx.allocator.create(Player);
+        const player = try ctx.allocator.create(Player);
         player.* = .{
             .allocator = ctx.allocator,
             .main_loop = ctx.main_loop,
@@ -370,7 +370,7 @@ pub const Context = struct {
 
         const channel_map = try toPAChannelMap(device.channels);
 
-        var stream = lib.pa_stream_new(ctx.pulse_ctx, ctx.app_name.ptr, &sample_spec, &channel_map);
+        const stream = lib.pa_stream_new(ctx.pulse_ctx, ctx.app_name.ptr, &sample_spec, &channel_map);
         if (stream == null)
             return error.OutOfMemory;
         errdefer lib.pa_stream_unref(stream);
@@ -405,7 +405,7 @@ pub const Context = struct {
             }
         }
 
-        var recorder = try ctx.allocator.create(Recorder);
+        const recorder = try ctx.allocator.create(Recorder);
         recorder.* = .{
             .allocator = ctx.allocator,
             .main_loop = ctx.main_loop,
@@ -707,7 +707,7 @@ pub const Recorder = struct {
 };
 
 fn successOp(_: ?*c.pa_context, success: c_int, player_opaque: ?*anyopaque) callconv(.C) void {
-    var player = @as(*Player, @ptrCast(@alignCast(player_opaque.?)));
+    const player = @as(*Player, @ptrCast(@alignCast(player_opaque.?)));
     if (success == 1)
         lib.pa_threaded_mainloop_signal(player.main_loop, 0);
 }
