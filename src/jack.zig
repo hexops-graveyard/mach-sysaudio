@@ -60,7 +60,7 @@ pub const Context = struct {
         lib.jack_set_info_function(@as(?*const fn ([*c]const u8) callconv(.C) void, @ptrCast(&util.doNothing)));
 
         var status: c.jack_status_t = 0;
-        var ctx = try allocator.create(Context);
+        const ctx = try allocator.create(Context);
         errdefer allocator.destroy(ctx);
         ctx.* = .{
             .allocator = allocator,
@@ -130,7 +130,7 @@ pub const Context = struct {
                 }
             }
 
-            var device = main.Device{
+            const device = main.Device{
                 .id = try ctx.allocator.dupeZ(u8, id),
                 .name = name,
                 .mode = mode,
@@ -189,7 +189,7 @@ pub const Context = struct {
             dest_ports[i] = dest_name;
         }
 
-        var player = try ctx.allocator.create(Player);
+        const player = try ctx.allocator.create(Player);
         player.* = .{
             .allocator = ctx.allocator,
             .client = ctx.client,
@@ -217,7 +217,7 @@ pub const Context = struct {
             dest_ports[i] = dest_name;
         }
 
-        var recorder = try ctx.allocator.create(Recorder);
+        const recorder = try ctx.allocator.create(Recorder);
         recorder.* = .{
             .allocator = ctx.allocator,
             .client = ctx.client,

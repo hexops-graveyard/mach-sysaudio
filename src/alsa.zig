@@ -87,7 +87,7 @@ pub const Context = struct {
         deviceChangeFn: main.Context.DeviceChangeFn,
         user_data: ?*anyopaque,
         thread: std.Thread,
-        aborted: std.atomic.Atomic(bool),
+        aborted: std.atomic.Value(bool),
         notify_fd: std.os.fd_t,
         notify_wd: std.os.fd_t,
         notify_pipe_fd: [2]std.os.fd_t,
@@ -98,7 +98,7 @@ pub const Context = struct {
 
         _ = lib.snd_lib_error_set_handler(@as(c.snd_lib_error_handler_t, @ptrCast(&util.doNothing)));
 
-        var ctx = try allocator.create(Context);
+        const ctx = try allocator.create(Context);
         errdefer allocator.destroy(ctx);
         ctx.* = .{
             .allocator = allocator,
@@ -146,7 +146,7 @@ pub const Context = struct {
                     break :blk .{
                         .deviceChangeFn = deviceChangeFn,
                         .user_data = options.user_data,
-                        .aborted = .{ .value = false },
+                        .aborted = .{ .raw = false },
                         .notify_fd = notify_fd,
                         .notify_wd = notify_wd,
                         .notify_pipe_fd = notify_pipe_fd,
@@ -325,7 +325,7 @@ pub const Context = struct {
 
                             if (chmap[0] == null) continue;
 
-                            var channels = try ctx.allocator.alloc(main.ChannelPosition, chmap.*.*.map.channels);
+                            const channels = try ctx.allocator.alloc(main.ChannelPosition, chmap.*.*.map.channels);
                             for (channels, 0..) |*ch, i|
                                 ch.* = fromAlsaChannel(chmap[0][0].map.pos()[i]) catch return error.OpeningDevice;
                             break :blk channels;
@@ -485,11 +485,11 @@ pub const Context = struct {
         var period_size: c_ulong = 0;
         try ctx.createStream(device, format, sample_rate, &pcm, &mixer, &selem, &mixer_elm, &period_size);
 
-        var player = try ctx.allocator.create(Player);
+        const player = try ctx.allocator.create(Player);
         player.* = .{
             .allocator = ctx.allocator,
             .thread = undefined,
-            .aborted = .{ .value = false },
+            .aborted = .{ .raw = false },
             .sample_buffer = try ctx.allocator.alloc(u8, period_size * format.frameSize(@intCast(device.channels.len))),
             .period_size = period_size,
             .pcm = pcm.?,
@@ -515,11 +515,11 @@ pub const Context = struct {
         var period_size: c_ulong = 0;
         try ctx.createStream(device, format, sample_rate, &pcm, &mixer, &selem, &mixer_elm, &period_size);
 
-        var recorder = try ctx.allocator.create(Recorder);
+        const recorder = try ctx.allocator.create(Recorder);
         recorder.* = .{
             .allocator = ctx.allocator,
             .thread = undefined,
-            .aborted = .{ .value = false },
+            .aborted = .{ .raw = false },
             .sample_buffer = try ctx.allocator.alloc(u8, period_size * format.frameSize(@intCast(device.channels.len))),
             .period_size = period_size,
             .pcm = pcm.?,
@@ -539,7 +539,7 @@ pub const Context = struct {
 pub const Player = struct {
     allocator: std.mem.Allocator,
     thread: std.Thread,
-    aborted: std.atomic.Atomic(bool),
+    aborted: std.atomic.Value(bool),
     sample_buffer: []u8,
     period_size: c_ulong,
     pcm: *c.snd_pcm_t,
@@ -653,7 +653,7 @@ pub const Player = struct {
 pub const Recorder = struct {
     allocator: std.mem.Allocator,
     thread: std.Thread,
-    aborted: std.atomic.Atomic(bool),
+    aborted: std.atomic.Value(bool),
     sample_buffer: []u8,
     period_size: c_ulong,
     pcm: *c.snd_pcm_t,

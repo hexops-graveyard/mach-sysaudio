@@ -31,7 +31,7 @@ pub const Context = struct {
         if (audio_context.is(.undefined))
             return error.ConnectionRefused;
 
-        var ctx = try allocator.create(Context);
+        const ctx = try allocator.create(Context);
         errdefer allocator.destroy(ctx);
         ctx.* = .{
             .allocator = allocator,
@@ -84,7 +84,7 @@ pub const Context = struct {
             js.createNumber(device.channels.len),
         }).view(.object);
 
-        var player = try ctx.allocator.create(Player);
+        const player = try ctx.allocator.create(Player);
         errdefer ctx.allocator.destroy(player);
 
         var captures = try ctx.allocator.alloc(js.Value, 1);
@@ -123,7 +123,7 @@ pub const Context = struct {
 
     pub fn createRecorder(ctx: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
         _ = readFn;
-        var recorder = try ctx.allocator.create(Recorder);
+        const recorder = try ctx.allocator.create(Recorder);
         recorder.* = .{
             .allocator = ctx.allocator,
             .is_paused = false,
