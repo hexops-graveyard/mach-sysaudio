@@ -32,7 +32,7 @@ pub const Context = struct {
     };
 
     pub fn init(comptime backend: ?Backend, allocator: std.mem.Allocator, options: Options) InitError!Context {
-        var data: backends.Context = blk: {
+        const data: backends.Context = blk: {
             if (backend) |b| {
                 break :blk try @typeInfo(
                     std.meta.fieldInfo(backends.Context, b).type,

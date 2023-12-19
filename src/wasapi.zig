@@ -215,10 +215,7 @@ pub const Context = struct {
                 win32.S_OK, win32.INPLACE_S_TRUNCATED => {},
                 else => return error.OpeningDevice,
             }
-            var wf = @as(
-                *win32.WAVEFORMATEXTENSIBLE,
-                @ptrCast(variant.anon.anon.anon.blob.pBlobData),
-            );
+            const wf: *win32.WAVEFORMATEXTENSIBLE = @ptrCast(variant.anon.anon.anon.blob.pBlobData);
             defer win32.CoTaskMemFree(variant.anon.anon.anon.blob.pBlobData);
 
             const channels = blk: {
@@ -438,7 +435,7 @@ pub const Context = struct {
         audio_client3: *?*win32.IAudioClient3,
         max_buffer_frames: *u32,
     ) !void {
-        var id_u16 = std.unicode.utf8ToUtf16LeWithNull(ctx.allocator, device.id) catch |err| switch (err) {
+        const id_u16 = std.unicode.utf8ToUtf16LeWithNull(ctx.allocator, device.id) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             else => unreachable,
         };
@@ -558,7 +555,7 @@ pub const Context = struct {
     }
 
     fn createEvent(audio_client: ?*win32.IAudioClient) !?*anyopaque {
-        var ready_event = win32.CreateEventA(null, 0, 0, null) orelse return error.SystemResources;
+        const ready_event = win32.CreateEventA(null, 0, 0, null) orelse return error.SystemResources;
         const hr = audio_client.?.SetEventHandle(ready_event);
         switch (hr) {
             win32.S_OK => return ready_event,
@@ -597,7 +594,7 @@ pub const Context = struct {
         try ctx.createAudioClient(device, format, sample_rate, &imm_device, &audio_client, &audio_client3, &max_buffer_frames);
 
         var render_client: ?*win32.IAudioRenderClient = null;
-        var hr = audio_client.?.GetService(win32.IID_IAudioRenderClient, @as(?*?*anyopaque, @ptrCast(&render_client)));
+        const hr = audio_client.?.GetService(win32.IID_IAudioRenderClient, @as(?*?*anyopaque, @ptrCast(&render_client)));
         switch (hr) {
             win32.S_OK => {},
             win32.E_POINTER => unreachable,
@@ -612,7 +609,7 @@ pub const Context = struct {
         const simple_volume = try createSimpleVolume(audio_client);
         const ready_event = try createEvent(audio_client);
 
-        var player = try ctx.allocator.create(Player);
+        const player = try ctx.allocator.create(Player);
         player.* = .{
             .allocator = ctx.allocator,
             .thread = undefined,
@@ -623,7 +620,7 @@ pub const Context = struct {
             .render_client = render_client,
             .ready_event = ready_event,
             .max_buffer_frames = max_buffer_frames,
-            .aborted = .{ .value = false },
+            .aborted = .{ .raw = false },
             .is_paused = false,
             .writeFn = writeFn,
             .user_data = options.user_data,
@@ -645,7 +642,7 @@ pub const Context = struct {
         try ctx.createAudioClient(device, format, sample_rate, &imm_device, &audio_client, &audio_client3, &max_buffer_frames);
 
         var capture_client: ?*win32.IAudioCaptureClient = null;
-        var hr = audio_client.?.GetService(win32.IID_IAudioCaptureClient, @as(?*?*anyopaque, @ptrCast(&capture_client)));
+        const hr = audio_client.?.GetService(win32.IID_IAudioCaptureClient, @as(?*?*anyopaque, @ptrCast(&capture_client)));
         switch (hr) {
             win32.S_OK => {},
             win32.E_POINTER => unreachable,
@@ -660,7 +657,7 @@ pub const Context = struct {
         const simple_volume = try createSimpleVolume(audio_client);
         const ready_event = try createEvent(audio_client);
 
-        var recorder = try ctx.allocator.create(Recorder);
+        const recorder = try ctx.allocator.create(Recorder);
         recorder.* = .{
             .allocator = ctx.allocator,
             .thread = undefined,
@@ -671,7 +668,7 @@ pub const Context = struct {
             .capture_client = capture_client,
             .ready_event = ready_event,
             .max_buffer_frames = max_buffer_frames,
-            .aborted = .{ .value = false },
+            .aborted = .{ .raw = false },
             .is_paused = false,
             .readFn = readFn,
             .user_data = options.user_data,
@@ -731,7 +728,7 @@ pub const Player = struct {
     render_client: ?*win32.IAudioRenderClient,
     ready_event: ?*anyopaque,
     max_buffer_frames: u32,
-    aborted: std.atomic.Atomic(bool),
+    aborted: std.atomic.Value(bool),
     is_paused: bool,
     writeFn: main.WriteFn,
     user_data: ?*anyopaque,
@@ -893,7 +890,7 @@ pub const Recorder = struct {
     capture_client: ?*win32.IAudioCaptureClient,
     ready_event: ?*anyopaque,
     max_buffer_frames: u32,
-    aborted: std.atomic.Atomic(bool),
+    aborted: std.atomic.Value(bool),
     is_paused: bool,
     readFn: main.ReadFn,
     user_data: ?*anyopaque,

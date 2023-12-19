@@ -34,7 +34,7 @@ pub fn main() !void {
         var iter = std.mem.split(u8, line, ":");
         const cmd = std.mem.trimRight(u8, iter.first(), &std.ascii.whitespace);
         if (std.mem.eql(u8, cmd, "vol")) {
-            var vol = try std.fmt.parseFloat(f32, std.mem.trim(u8, iter.next().?, &std.ascii.whitespace));
+            const vol = try std.fmt.parseFloat(f32, std.mem.trim(u8, iter.next().?, &std.ascii.whitespace));
             try player.setVolume(vol);
         } else if (std.mem.eql(u8, cmd, "pause")) {
             try player.pause();

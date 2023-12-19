@@ -21,7 +21,7 @@ pub const Context = struct {
             is_darling = true;
         } else |_| {}
 
-        var ctx = try allocator.create(Context);
+        const ctx = try allocator.create(Context);
         errdefer allocator.destroy(ctx);
         ctx.* = .{
             .allocator = allocator,
@@ -63,7 +63,7 @@ pub const Context = struct {
         const devices_count = io_size / @sizeOf(c.AudioObjectID);
         if (devices_count == 0) return;
 
-        var devs = try ctx.allocator.alloc(c.AudioObjectID, devices_count);
+        const devs = try ctx.allocator.alloc(c.AudioObjectID, devices_count);
         defer ctx.allocator.free(devs);
         if (c.AudioObjectGetPropertyData(
             c.kAudioObjectSystemObject,
@@ -98,7 +98,7 @@ pub const Context = struct {
         }
 
         for (devs) |id| {
-            var buf_list = try ctx.allocator.create(c.AudioBufferList);
+            const buf_list = try ctx.allocator.create(c.AudioBufferList);
             defer ctx.allocator.destroy(buf_list);
 
             for (std.meta.tags(main.Device.Mode)) |mode| {
@@ -168,7 +168,7 @@ pub const Context = struct {
                     output_channel_count += output_audio_buffer_list.mBuffers[mBufferIndex].mNumberChannels;
                 }
 
-                var channels = try ctx.allocator.alloc(main.ChannelPosition, output_channel_count);
+                const channels = try ctx.allocator.alloc(main.ChannelPosition, output_channel_count);
 
                 prop_address.mSelector = c.kAudioDevicePropertyNominalSampleRate;
                 io_size = @sizeOf(f64);
@@ -211,7 +211,7 @@ pub const Context = struct {
                 const id_str = try std.fmt.allocPrintZ(ctx.allocator, "{d}", .{id});
                 errdefer ctx.allocator.free(id_str);
 
-                var dev = main.Device{
+                const dev = main.Device{
                     .id = id_str,
                     .name = name,
                     .mode = mode,
@@ -244,7 +244,7 @@ pub const Context = struct {
     }
 
     pub fn createPlayer(ctx: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
-        var player = try ctx.allocator.create(Player);
+        const player = try ctx.allocator.create(Player);
         errdefer ctx.allocator.destroy(player);
 
         // obtain an AudioOutputUnit using an AUHAL component description
@@ -322,7 +322,7 @@ pub const Context = struct {
     }
 
     pub fn createRecorder(ctx: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
-        var recorder = try ctx.allocator.create(Recorder);
+        const recorder = try ctx.allocator.create(Recorder);
         errdefer ctx.allocator.destroy(recorder);
 
         const device_id = std.fmt.parseInt(c.AudioDeviceID, device.id, 10) catch return error.OpeningDevice;
@@ -344,7 +344,7 @@ pub const Context = struct {
         }
 
         std.debug.assert(io_size == @sizeOf(c.AudioBufferList));
-        var buf_list = try ctx.allocator.create(c.AudioBufferList);
+        const buf_list = try ctx.allocator.create(c.AudioBufferList);
         errdefer ctx.allocator.destroy(buf_list);
 
         if (c.AudioObjectGetPropertyData(
@@ -729,7 +729,7 @@ fn createStreamDesc(format: main.Format, sample_rate: u24, ch_count: usize) !c.A
         .mReserved = 0,
     };
 
-    if (native_endian == .Big) {
+    if (native_endian == .big) {
         desc.mFormatFlags |= c.kAudioFormatFlagIsBigEndian;
     }
 

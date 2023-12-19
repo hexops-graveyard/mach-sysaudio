@@ -34,7 +34,7 @@ pub const Context = struct {
     pub fn init(allocator: std.mem.Allocator, options: main.Context.Options) !backends.Context {
         _ = options;
 
-        var ctx = try allocator.create(Context);
+        const ctx = try allocator.create(Context);
         errdefer allocator.destroy(ctx);
         ctx.* = .{
             .allocator = allocator,
@@ -79,7 +79,7 @@ pub const Context = struct {
 
     pub fn createPlayer(ctx: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
         _ = writeFn;
-        var player = try ctx.allocator.create(Player);
+        const player = try ctx.allocator.create(Player);
         player.* = .{
             .allocator = ctx.allocator,
             .is_paused = false,
@@ -93,7 +93,7 @@ pub const Context = struct {
 
     pub fn createRecorder(ctx: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
         _ = readFn;
-        var recorder = try ctx.allocator.create(Recorder);
+        const recorder = try ctx.allocator.create(Recorder);
         recorder.* = .{
             .allocator = ctx.allocator,
             .is_paused = false,
