@@ -3,6 +3,8 @@ const main = @import("main.zig");
 const backends = @import("backends.zig");
 const util = @import("util.zig");
 
+const default_sample_rate = 44_100; // Hz
+
 const dummy_playback = main.Device{
     .id = "dummy-playback",
     .name = "Dummy Device",
@@ -86,7 +88,7 @@ pub const Context = struct {
             .vol = 1.0,
             .channels = device.channels,
             .format = options.format,
-            .sample_rate = options.sample_rate,
+            .sample_rate = options.sample_rate orelse default_sample_rate,
         };
         return .{ .dummy = player };
     }
@@ -100,7 +102,7 @@ pub const Context = struct {
             .vol = 1.0,
             .channels = device.channels,
             .format = options.format,
-            .sample_rate = options.sample_rate,
+            .sample_rate = options.sample_rate orelse default_sample_rate,
         };
         return .{ .dummy = recorder };
     }

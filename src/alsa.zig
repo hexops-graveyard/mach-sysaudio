@@ -6,6 +6,8 @@ const util = @import("util.zig");
 const inotify_event = std.os.linux.inotify_event;
 const is_little = @import("builtin").cpu.arch.endian() == .Little;
 
+const default_sample_rate = 44_100; // Hz
+
 var lib: Lib = undefined;
 const Lib = struct {
     handle: std.DynLib,
@@ -475,7 +477,7 @@ pub const Context = struct {
 
     pub fn createPlayer(ctx: Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
         const format = device.preferredFormat(options.format);
-        const sample_rate = device.sample_rate.clamp(options.sample_rate);
+        const sample_rate = device.sample_rate.clamp(options.sample_rate orelse default_sample_rate);
         var pcm: ?*c.snd_pcm_t = null;
         var mixer: ?*c.snd_mixer_t = null;
         var selem: ?*c.snd_mixer_selem_id_t = null;
@@ -505,7 +507,7 @@ pub const Context = struct {
 
     pub fn createRecorder(ctx: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
         const format = device.preferredFormat(options.format);
-        const sample_rate = device.sample_rate.clamp(options.sample_rate);
+        const sample_rate = device.sample_rate.clamp(options.sample_rate orelse default_sample_rate);
         var pcm: ?*c.snd_pcm_t = null;
         var mixer: ?*c.snd_mixer_t = null;
         var selem: ?*c.snd_mixer_selem_id_t = null;

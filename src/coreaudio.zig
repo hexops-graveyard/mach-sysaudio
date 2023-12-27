@@ -10,6 +10,8 @@ const c = @cImport({
 const native_endian = builtin.cpu.arch.endian();
 var is_darling = false;
 
+const default_sample_rate = 44_100; // Hz
+
 pub const Context = struct {
     allocator: std.mem.Allocator,
     devices_info: util.DevicesInfo,
@@ -280,7 +282,7 @@ pub const Context = struct {
             return error.OpeningDevice;
         }
 
-        const stream_desc = try createStreamDesc(options.format, options.sample_rate, device.channels.len);
+        const stream_desc = try createStreamDesc(options.format, options.sample_rate orelse default_sample_rate, device.channels.len);
         if (c.AudioUnitSetProperty(
             audio_unit,
             c.kAudioUnitProperty_StreamFormat,
@@ -316,7 +318,7 @@ pub const Context = struct {
             .user_data = options.user_data,
             .channels = device.channels,
             .format = options.format,
-            .sample_rate = options.sample_rate,
+            .sample_rate = options.sample_rate orelse default_sample_rate,
         };
         return .{ .coreaudio = player };
     }
@@ -443,7 +445,14 @@ pub const Context = struct {
         }
 
         // Set the desired output format.
-        const stream_desc = try createStreamDesc(options.format, options.sample_rate, device.channels.len);
+        const sample_rate = blk: {
+            if (options.sample_rate) |rate| {
+                if (rate < device.sample_rate.min or rate > device.sample_rate.max) return error.OpeningDevice;
+                break :blk rate;
+            }
+            break :blk device.sample_rate.max;
+        };
+        const stream_desc = try createStreamDesc(options.format, sample_rate, device.channels.len);
         if (c.AudioUnitSetProperty(
             audio_unit,
             c.kAudioUnitProperty_StreamFormat,
@@ -470,7 +479,7 @@ pub const Context = struct {
             .user_data = options.user_data,
             .channels = device.channels,
             .format = options.format,
-            .sample_rate = options.sample_rate,
+            .sample_rate = sample_rate,
         };
         return .{ .coreaudio = recorder };
     }

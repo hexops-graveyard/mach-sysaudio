@@ -5,6 +5,8 @@ const backends = @import("backends.zig");
 const util = @import("util.zig");
 const is_little = @import("builtin").cpu.arch.endian() == .Little;
 
+const default_sample_rate = 44_100; // Hz
+
 var lib: Lib = undefined;
 const Lib = struct {
     handle: std.DynLib,
@@ -292,7 +294,7 @@ pub const Context = struct {
         defer lib.pa_threaded_mainloop_unlock(ctx.main_loop);
 
         const format = device.preferredFormat(options.format);
-        const sample_rate = device.sample_rate.clamp(options.sample_rate);
+        const sample_rate = device.sample_rate.clamp(options.sample_rate orelse default_sample_rate);
 
         const sample_spec = c.pa_sample_spec{
             .format = toPAFormat(format),
@@ -359,7 +361,7 @@ pub const Context = struct {
         defer lib.pa_threaded_mainloop_unlock(ctx.main_loop);
 
         const format = device.preferredFormat(options.format);
-        const sample_rate = device.sample_rate.clamp(options.sample_rate);
+        const sample_rate = device.sample_rate.clamp(options.sample_rate orelse default_sample_rate);
 
         const sample_spec = c.pa_sample_spec{
             .format = toPAFormat(format),

@@ -7,7 +7,6 @@ const conv = @import("conv.zig");
 pub const Backend = backends.Backend;
 pub const Range = util.Range;
 
-pub const default_sample_rate = 44_100; // Hz
 pub const default_latency = 500 * std.time.us_per_ms; // μs
 pub const min_sample_rate = 8_000; // Hz
 pub const max_sample_rate = 5_644_800; // Hz
@@ -115,7 +114,7 @@ pub const Context = struct {
 
 pub const StreamOptions = struct {
     format: Format = .f32,
-    sample_rate: u24 = default_sample_rate,
+    sample_rate: ?u24 = null,
     media_role: MediaRole = .default,
     user_data: ?*anyopaque = null,
 };

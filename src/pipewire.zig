@@ -7,6 +7,8 @@ const main = @import("main.zig");
 const backends = @import("backends.zig");
 const util = @import("util.zig");
 
+const default_sample_rate = 44_100; // Hz
+
 var lib: Lib = undefined;
 const Lib = struct {
     handle: std.DynLib,
@@ -160,7 +162,7 @@ pub const Context = struct {
         };
 
         var buf: [8]u8 = undefined;
-        const audio_rate = std.fmt.bufPrintZ(&buf, "{d}", .{options.sample_rate}) catch unreachable;
+        const audio_rate = std.fmt.bufPrintZ(&buf, "{d}", .{options.sample_rate orelse default_sample_rate}) catch unreachable;
 
         const props = lib.pw_properties_new(
             c.PW_KEY_MEDIA_TYPE,
@@ -223,7 +225,7 @@ pub const Context = struct {
         var info = c.spa_audio_info_raw{
             .format = c.SPA_AUDIO_FORMAT_F32,
             .channels = @as(u32, @intCast(device.channels.len)),
-            .rate = options.sample_rate,
+            .rate = options.sample_rate orelse default_sample_rate,
             .flags = 0,
             .position = undefined,
         };
@@ -250,7 +252,7 @@ pub const Context = struct {
             .user_data = options.user_data,
             .channels = device.channels,
             .format = .f32,
-            .sample_rate = options.sample_rate,
+            .sample_rate = options.sample_rate orelse default_sample_rate,
         };
         return .{ .pipewire = player };
     }
@@ -265,7 +267,7 @@ pub const Context = struct {
         };
 
         var buf: [8]u8 = undefined;
-        const audio_rate = std.fmt.bufPrintZ(&buf, "{d}", .{options.sample_rate}) catch unreachable;
+        const audio_rate = std.fmt.bufPrintZ(&buf, "{d}", .{options.sample_rate orelse default_sample_rate}) catch unreachable;
 
         const props = lib.pw_properties_new(
             c.PW_KEY_MEDIA_TYPE,
@@ -328,7 +330,7 @@ pub const Context = struct {
         var info = c.spa_audio_info_raw{
             .format = c.SPA_AUDIO_FORMAT_F32,
             .channels = @as(u32, @intCast(device.channels.len)),
-            .rate = options.sample_rate,
+            .rate = options.sample_rate orelse default_sample_rate,
             .flags = 0,
             .position = undefined,
         };
@@ -355,7 +357,7 @@ pub const Context = struct {
             .user_data = options.user_data,
             .channels = device.channels,
             .format = .f32,
-            .sample_rate = options.sample_rate,
+            .sample_rate = options.sample_rate orelse default_sample_rate,
         };
         return .{ .pipewire = recorder };
     }

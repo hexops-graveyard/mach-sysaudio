@@ -4,6 +4,7 @@ const main = @import("main.zig");
 const backends = @import("backends.zig");
 const util = @import("util.zig");
 
+const default_sample_rate = 44_100; // Hz
 const channel_size = 1024;
 const channel_size_bytes = channel_size * @sizeOf(f32);
 
@@ -70,7 +71,7 @@ pub const Context = struct {
     pub fn createPlayer(ctx: *Context, device: main.Device, writeFn: main.WriteFn, options: main.StreamOptions) !backends.Player {
         const context_options = js.createMap();
         defer context_options.deinit();
-        context_options.set("sampleRate", js.createNumber(options.sample_rate));
+        context_options.set("sampleRate", js.createNumber(options.sample_rate orelse default_sample_rate));
 
         const audio_context = js.constructType("AudioContext", &.{context_options.toValue()});
         const gain_node = audio_context.call("createGain", &.{
@@ -114,7 +115,7 @@ pub const Context = struct {
             .user_data = options.user_data,
             .channels = device.channels,
             .format = .f32,
-            .sample_rate = options.sample_rate,
+            .sample_rate = options.sample_rate orelse default_sample_rate,
         };
 
         return .{ .webaudio = player };
@@ -129,7 +130,7 @@ pub const Context = struct {
             .vol = 1.0,
             .channels = device.channels,
             .format = options.format,
-            .sample_rate = options.sample_rate,
+            .sample_rate = options.sample_rate orelse default_sample_rate,
         };
         return .{ .webaudio = recorder };
     }
