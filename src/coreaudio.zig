@@ -7,6 +7,8 @@ const c = @cImport({
     @cInclude("CoreAudio/CoreAudio.h");
     @cInclude("AudioUnit/AudioUnit.h");
 });
+const avaudio = @import("objc").avf_audio.avaudio;
+
 const native_endian = builtin.cpu.arch.endian();
 var is_darling = false;
 
@@ -324,6 +326,27 @@ pub const Context = struct {
     }
 
     pub fn createRecorder(ctx: *Context, device: main.Device, readFn: main.ReadFn, options: main.StreamOptions) !backends.Recorder {
+        // Request permission to record via requestRecordPermission. If permission was previously
+        // granted, it will immediately return. Otherwise the function will block, the OS will display
+        // an "<App> wants to access the Microphone. [Allow] [Deny]" menu, then the callback will be
+        // invoked and requestRecordPermission will return.
+        const audio_session = avaudio.AVAudioSession.sharedInstance();
+        const PermissionContext = void;
+        var perm_ctx: PermissionContext = {};
+        audio_session.requestRecordPermission(perm_ctx, (struct {
+            pub fn callback(perm_ctx_2: PermissionContext, permission_granted: bool) void {
+                _ = permission_granted;
+                _ = perm_ctx_2;
+                // Note: in the event permission was NOT granted by the user, we could capture that here
+                // and surface it as an error.
+                //
+                // However, in this situation the OS will simply replace all audio samples with zero-value
+                // (silence) ones - so there's no harm for us in doing nothing in that case: the user would
+                // find out we're recording only silence, and they would need to correct it in their System
+                // Preferences by granting the app permission to record.
+            }
+        }).callback);
+
         var recorder = try ctx.allocator.create(Recorder);
         errdefer ctx.allocator.destroy(recorder);
 

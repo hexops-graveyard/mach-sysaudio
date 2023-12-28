@@ -8,10 +8,15 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    const mach_objc_dep = b.dependency("mach_objc", .{
+        .target = target,
+        .optimize = optimize,
+    });
     const module = b.addModule("mach-sysaudio", .{
         .source_file = .{ .path = sdkPath("/src/main.zig") },
         .dependencies = &.{
             .{ .name = "sysjs", .module = mach_sysjs_dep.module("mach-sysjs") },
+            .{ .name = "objc", .module = mach_objc_dep.module("mach-objc") },
         },
     });
 
