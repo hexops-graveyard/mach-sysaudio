@@ -32,15 +32,36 @@ pub fn build(b: *std.Build) void {
         module.linkFramework("CoreAudio", .{});
     }
     if (target.result.os.tag == .linux) {
-        module.link_libc = true;
-        module.linkLibrary(b.dependency("linux_audio_headers", .{
+        const linux_audio_headers_dep = b.dependency("linux_audio_headers", .{
             .target = target,
             .optimize = optimize,
-        }).artifact("linux-audio-headers"));
-        module.addCSourceFile(.{
+        });
+        module.link_libc = true;
+        module.linkLibrary(linux_audio_headers_dep.artifact("linux-audio-headers"));
+
+        // TODO: for some reason this is not functional, a Zig bug (only when using this Zig package
+        // externally):
+        //
+        // module.addCSourceFile(.{
+        //     .file = .{ .path = "src/pipewire/sysaudio.c" },
+        //     .flags = &.{"-std=gnu99"},
+        // });
+        //
+        // error: unable to check cache: stat file '/Volumes/data/hexops/mach-flac/zig-cache//Volumes/data/hexops/mach-flac/src/pipewire/sysaudio.c' failed: FileNotFound
+        //
+        // So instead we do this:
+        const lib = b.addStaticLibrary(.{
+            .name = "sysaudio-pipewire",
+            .target = target,
+            .optimize = optimize,
+        });
+        lib.linkLibC();
+        lib.addCSourceFile(.{
             .file = .{ .path = "src/pipewire/sysaudio.c" },
             .flags = &.{"-std=gnu99"},
         });
+        lib.linkLibrary(linux_audio_headers_dep.artifact("linux-audio-headers"));
+        module.linkLibrary(lib);
     }
 
     const main_tests = b.addTest(.{
