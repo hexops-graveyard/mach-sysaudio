@@ -15,7 +15,7 @@ pub fn build(b: *std.Build) void {
     const module = b.addModule("mach-sysaudio", .{
         .target = target,
         .optimize = optimize,
-        .root_source_file = .{ .path = sdkPath("/src/main.zig") },
+        .root_source_file = .{ .path = "src/main.zig" },
         .imports = &.{
             .{ .name = "sysjs", .module = mach_sysjs_dep.module("mach-sysjs") },
             .{ .name = "objc", .module = mach_objc_dep.module("mach-objc") },
@@ -38,7 +38,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }).artifact("linux-audio-headers"));
         module.addCSourceFile(.{
-            .file = .{ .path = sdkPath("/src/pipewire/sysaudio.c") },
+            .file = .{ .path = "src/pipewire/sysaudio.c" },
             .flags = &.{"-std=gnu99"},
         });
     }
@@ -91,20 +91,4 @@ pub fn link(b: *std.Build, step: *std.Build.Step.Compile) void {
     _ = step;
 
     @panic("link(b, step) has been deprecated; use addPaths(step) instead.");
-}
-
-// pub fn link(b: *std.Build, step: *std.build.CompileStep) void {
-//     if (step.target.toTarget().cpu.arch != .wasm32) {
-//         if (step.target.toTarget().isDarwin()) {
-//         } else if (step.target.toTarget().os.tag == .linux) {
-//         }
-//     }
-// }
-
-fn sdkPath(comptime suffix: []const u8) []const u8 {
-    if (suffix[0] != '/') @compileError("suffix must be an absolute path");
-    return comptime blk: {
-        const root_dir = std.fs.path.dirname(@src().file) orelse ".";
-        break :blk root_dir ++ suffix;
-    };
 }
