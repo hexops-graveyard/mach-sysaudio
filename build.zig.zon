@@ -13,20 +13,20 @@
     },
     .dependencies = .{
         .mach_sysjs = .{
-            .url = "https://pkg.machengine.org/mach-sysjs/bafd6c9b8fd5e7be1e8e24cfbd156703d6026aa8.tar.gz",
-            .hash = "1220187935c4c5d4cf824927df28e858dcd06cb864bb5d6be4cd349d2836abb4aec4",
+            .url = "https://pkg.machengine.org/mach-sysjs/eeef024f79beae189b7a4ed85e64ed076e76d538.tar.gz",
+            .hash = "1220db6845ce34743ae2a1ab0222efc942496adde2736c20e3443d4fde4ef64b11b9",
         },
         .linux_audio_headers = .{
-            .url = "https://pkg.machengine.org/linux-audio-headers/6b182ff9d51009ca903f3bac63777fbfa654e5f5.tar.gz",
-            .hash = "122052c4415f4d5be98e3324083939af644d5f8eddd2e6a1a544596645eda8cf411a",
+            .url = "https://pkg.machengine.org/linux-audio-headers/302c41dc4ab5fa292c3062e9e0d26c7f62652740.tar.gz",
+            .hash = "1220dc84528a0e298467bec65ab158426306961f08e7555eab9eef684ef126893689",
         },
         .xcode_frameworks = .{
-            .url = "https://pkg.machengine.org/xcode-frameworks/8a920385383cc4c0a2a4f55b084d402a9400a5a8.tar.gz",
-            .hash = "122051b3c616c62d55a82207c1cb76e2264b26e8378f56b1e5376d7684bd13616589",
+            .url = "https://pkg.machengine.org/xcode-frameworks/ff1f5c15120b65504d8feccca8015a7e96ed580c.tar.gz",
+            .hash = "12207bc2707695102c636c26b60343e634127ee4d6e23210b1ae1664b2b2fea6076f",
         },
         .mach_objc = .{
-            .url = "https://pkg.machengine.org/mach-objc/3990b1a8160db402662c3ad082e118014ca91f98.tar.gz",
-            .hash = "122048e3b9816a85d1571dcb4cfd9636562b6c3544435beb47c6ed33c8d6ade7825e",
+            .url = "https://pkg.machengine.org/mach-objc/bfe6d002fd5a35c0d7d470cd60a58abad14fc1bf.tar.gz",
+            .hash = "12204073b48a4f3cf7e4dcc3502690eee77fa1805b4aa5cb5e2ed67eed184b8a8371",
         },
     },
 }
