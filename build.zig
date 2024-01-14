@@ -13,12 +13,35 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     const module = b.addModule("mach-sysaudio", .{
-        .source_file = .{ .path = sdkPath("/src/main.zig") },
-        .dependencies = &.{
+        .target = target,
+        .optimize = optimize,
+        .root_source_file = .{ .path = sdkPath("/src/main.zig") },
+        .imports = &.{
             .{ .name = "sysjs", .module = mach_sysjs_dep.module("mach-sysjs") },
             .{ .name = "objc", .module = mach_objc_dep.module("mach-objc") },
         },
     });
+    if (target.result.isDarwin()) {
+        // Transitive dependencies, explicit linkage of these works around
+        // ziglang/zig#17130
+        module.linkSystemLibrary("objc", .{});
+
+        // Direct dependencies
+        module.linkFramework("AudioToolbox", .{});
+        module.linkFramework("CoreFoundation", .{});
+        module.linkFramework("CoreAudio", .{});
+    }
+    if (target.result.os.tag == .linux) {
+        module.link_libc = true;
+        module.linkLibrary(b.dependency("linux_audio_headers", .{
+            .target = target,
+            .optimize = optimize,
+        }).artifact("linux-audio-headers"));
+        module.addCSourceFile(.{
+            .file = .{ .path = sdkPath("/src/pipewire/sysaudio.c") },
+            .flags = &.{"-std=gnu99"},
+        });
+    }
 
     const main_tests = b.addTest(.{
         .name = "test",
@@ -26,7 +49,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    link(b, main_tests);
+    addPaths(main_tests);
     b.installArtifact(main_tests);
 
     const test_run_cmd = b.addRunArtifact(main_tests);
@@ -43,8 +66,8 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         });
-        example_exe.addModule("mach-sysaudio", module);
-        link(b, example_exe);
+        example_exe.root_module.addImport("mach-sysaudio", module);
+        addPaths(example_exe);
         b.installArtifact(example_exe);
 
         const example_compile_step = b.step(example, "Compile '" ++ example ++ "' example");
@@ -59,32 +82,24 @@ pub fn build(b: *std.Build) void {
     }
 }
 
-pub fn link(b: *std.Build, step: *std.build.CompileStep) void {
-    if (step.target.toTarget().cpu.arch != .wasm32) {
-        if (step.target.toTarget().isDarwin()) {
-            @import("xcode_frameworks").addPaths(step);
-
-            // Transitive dependencies, explicit linkage of these works around
-            // ziglang/zig#17130
-            step.linkSystemLibrary("objc");
-
-            // Direct dependencies
-            step.linkFramework("AudioToolbox");
-            step.linkFramework("CoreFoundation");
-            step.linkFramework("CoreAudio");
-        } else if (step.target.toTarget().os.tag == .linux) {
-            step.linkLibrary(b.dependency("linux_audio_headers", .{
-                .target = step.target,
-                .optimize = step.optimize,
-            }).artifact("linux-audio-headers"));
-            step.addCSourceFile(.{
-                .file = .{ .path = sdkPath("/src/pipewire/sysaudio.c") },
-                .flags = &.{"-std=gnu99"},
-            });
-            step.linkLibC();
-        }
-    }
+pub fn addPaths(step: *std.Build.Step.Compile) void {
+    if (step.rootModuleTarget().isDarwin()) @import("xcode_frameworks").addPaths(step);
 }
+
+pub fn link(b: *std.Build, step: *std.Build.Step.Compile) void {
+    _ = b;
+    _ = step;
+
+    @panic("link(b, step) has been deprecated; use addPaths(step) instead.");
+}
+
+// pub fn link(b: *std.Build, step: *std.build.CompileStep) void {
+//     if (step.target.toTarget().cpu.arch != .wasm32) {
+//         if (step.target.toTarget().isDarwin()) {
+//         } else if (step.target.toTarget().os.tag == .linux) {
+//         }
+//     }
+// }
 
 fn sdkPath(comptime suffix: []const u8) []const u8 {
     if (suffix[0] != '/') @compileError("suffix must be an absolute path");
