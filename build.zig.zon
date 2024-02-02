@@ -21,12 +21,12 @@
             .hash = "1220dc84528a0e298467bec65ab158426306961f08e7555eab9eef684ef126893689",
         },
         .xcode_frameworks = .{
-            .url = "https://pkg.machengine.org/xcode-frameworks/ff1f5c15120b65504d8feccca8015a7e96ed580c.tar.gz",
-            .hash = "12207bc2707695102c636c26b60343e634127ee4d6e23210b1ae1664b2b2fea6076f",
+            .url = "https://pkg.machengine.org/xcode-frameworks/e7c2abbe28efbb5ae7f04e6c1ac6578a6d75bb67.tar.gz",
+            .hash = "1220432df3c74dc28bd6cc299e5c8317bc65a95219e6ebf40450c157d8c7a3ac54c0",
         },
         .mach_objc = .{
-            .url = "https://pkg.machengine.org/mach-objc/bfe6d002fd5a35c0d7d470cd60a58abad14fc1bf.tar.gz",
-            .hash = "12204073b48a4f3cf7e4dcc3502690eee77fa1805b4aa5cb5e2ed67eed184b8a8371",
+            .url = "https://pkg.machengine.org/mach-objc/2b2a698e7f019e1599edb3eda4a974fa1fb07483.tar.gz",
+            .hash = "1220d708af437c2076d1a0482ac745b3c4507f4f41cc9f248ee78a3c297c41ee7c33",
         },
     },
 }

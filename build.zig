@@ -70,7 +70,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    addPaths(main_tests);
+    addPaths(&main_tests.root_module);
     b.installArtifact(main_tests);
 
     const test_run_cmd = b.addRunArtifact(main_tests);
@@ -88,7 +88,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
         example_exe.root_module.addImport("mach-sysaudio", module);
-        addPaths(example_exe);
+        addPaths(&example_exe.root_module);
         b.installArtifact(example_exe);
 
         const example_compile_step = b.step(example, "Compile '" ++ example ++ "' example");
@@ -103,13 +103,6 @@ pub fn build(b: *std.Build) void {
     }
 }
 
-pub fn addPaths(step: *std.Build.Step.Compile) void {
-    if (step.rootModuleTarget().isDarwin()) @import("xcode_frameworks").addPaths(step);
-}
-
-pub fn link(b: *std.Build, step: *std.Build.Step.Compile) void {
-    _ = b;
-    _ = step;
-
-    @panic("link(b, step) has been deprecated; use addPaths(step) instead.");
+pub fn addPaths(mod: *std.Build.Module) void {
+    if (mod.resolved_target.?.result.isDarwin()) @import("xcode_frameworks").addPaths(mod);
 }
