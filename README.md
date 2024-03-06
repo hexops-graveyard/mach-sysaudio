@@ -7,27 +7,6 @@
 
 Truly cross-platform, low-level, audio IO in Zig.
 
-## Features
+## Moved
 
-Playback and recording with backends for:
-
-* Linux
-  * PulseAudio
-  * PipeWire
-  * Jack
-  * ALSA
-* Windows: WASAPI
-* macOS/iOS: CoreAudio
-* WebAssembly: WebAudio
-
-## Documentation
-
-[machengine.org/pkg/mach-sysaudio](https://machengine.org/pkg/mach-sysaudio)
-
-## Join the community
-
-Join the [Mach community on Discord](https://discord.gg/XNG3NZgCqp) to discuss this project, ask questions, get help, etc.
-
-## Issues
-
-Issues are tracked in the [main Mach repository](https://github.com/hexops/mach/issues?q=is%3Aissue+is%3Aopen+label%3Asysaudio).
+This project has moved into [the Mach standard library](https://machengine.org/engine/stdlib/) (specifically [here](https://github.com/hexops/mach/tree/main/src/sysaudio)).
